@@ -1,0 +1,2 @@
+/* Compatibility loader for the existing root stylesheet. */
+@import url('../styles.css');
