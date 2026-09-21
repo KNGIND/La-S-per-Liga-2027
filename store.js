@@ -92,6 +92,18 @@
   LSL.prefs = LS.get(K_PREFS, {}) || {};
   LSL.savePrefs = function () { LS.set(K_PREFS, LSL.prefs); };
 
+  /* ---------- perfil de usuario (queda guardado en este dispositivo) ---------- */
+  var K_PROFILE = 'lsl:profile';
+  LSL.profile = {
+    get: function () { var p = LS.get(K_PROFILE, null); return p && p.name ? p : null; },
+    save: function (patch) {
+      var o = Object.assign({}, LS.get(K_PROFILE, {}) || {}, patch);
+      LS.set(K_PROFILE, o);
+      if (o.team) { LSL.prefs.fav = o.team; LSL.savePrefs(); }   // el equipo del perfil es tu "Mi equipo"
+      return o;
+    }
+  };
+
   /* ---------- estado por defecto ---------- */
   function defaults() {
     return {

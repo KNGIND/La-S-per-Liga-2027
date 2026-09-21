@@ -200,6 +200,7 @@
       { k: 'cup', l: 'Nombre de la copa', t: 'text', ph: 'Copa Súper' },
       { k: 'leg2', l: 'Es partido de vuelta', t: 'check' },
       { k: 'firstLeg', l: 'Resultado de la ida', t: 'text', ph: '2-1' },
+      { k: 'pens', l: 'Penales (local-visita, si se definió así)', t: 'text', ph: '5-4' },
       { k: 'hs', l: 'Goles local', t: 'number', w: 'h' }, { k: 'as', l: 'Goles visitante', t: 'number', w: 'h' },
       { k: 'minute', l: 'Minuto (solo en vivo)', t: 'text', ph: '67' },
       { k: 'channel', l: 'Canal de TV', t: 'select', o: [['', 'Sin canal']].concat(S.state.channels.map(function (c) { return [c.id, c.name]; })) },
@@ -252,6 +253,7 @@
     $('[data-w=cup]', host).hidden = comp !== 'copa';
     $('[data-w=leg2]', host).hidden = comp === 'liga';
     $('[data-w=firstLeg]', host).hidden = !(l2 && comp !== 'liga');
+    var pw = $('[data-w=pens]', host); if (pw) pw.hidden = comp === 'liga';
   }
   function matchBind(host) {
     fillLists(host); visibility(host);
@@ -292,7 +294,7 @@
 
   function matchForm(id) {
     var ex = id ? S.match(id) : null, ts = S.state.teams;
-    var m = ex ? U.clone(ex) : { id: U.uid('m'), home: ts[0] ? ts[0].id : '', away: ts[1] ? ts[1].id : '', date: defDate(), comp: 'liga', round: '', cup: '', leg2: false, firstLeg: '', stadium: '', channel: '', status: 'upcoming', minute: '', hs: 0, as: 0, room: '', hf: '4-3-3', af: '4-3-3', hl: [], al: [], events: [], notes: '' };
+    var m = ex ? U.clone(ex) : { id: U.uid('m'), home: ts[0] ? ts[0].id : '', away: ts[1] ? ts[1].id : '', date: defDate(), comp: 'liga', round: '', cup: '', leg2: false, firstLeg: '', pens: '', stadium: '', channel: '', status: 'upcoming', minute: '', hs: 0, as: 0, room: '', hf: '4-3-3', af: '4-3-3', hl: [], al: [], events: [], notes: '' };
     if (ts.length < 2) return toast('Cargá al menos 2 equipos primero.');
     var fl = MFIELDS();
     openForm({
@@ -434,7 +436,7 @@
 
   /* ---------- DISEÑO (se aplica en vivo) ---------- */
   function navPreview(style, i) {
-    var items = [['home', 'Inicio'], ['trophy', 'Liga'], ['ball', 'Partidos'], ['news', 'Noticias'], ['more', 'Más']];
+    var items = [['home', 'Inicio'], ['trophy', 'Liga'], ['ball', 'Partidos'], ['news', 'Noticias'], ['user', 'Perfil']];
     return '<div class="navp" id="navp" data-nav="' + style + '"><div class="nav-bar" style="--n:5;--i:' + (i || 0) + '"><span class="nav-ind"></span>' + items.map(function (t, k) {
       return '<button class="nav-i' + (k === 2 ? ' c' : '') + (k === (i || 0) ? ' on' : '') + '" data-a="navp" data-v="' + k + '"><span class="ico">' + ic(t[0]) + '</span><span class="lb">' + t[1] + '</span></button>';
     }).join('') + '</div></div>';
@@ -447,9 +449,9 @@
       '<span class="fl-t">Modo por defecto</span>' + seg('mode', [['dark', 'Oscuro'], ['light', 'Claro']], d.mode) + '</section>';
     h += '<section class="af-sec flat"><h3>Navegación inferior</h3><p class="mut sm">Tocá un estilo y probalo abajo (tocá los íconos de la vista previa).</p>' + navPreview(d.nav, 0) +
       '<div class="chips wrapc">' + NAVS.map(function (n) { return '<button class="' + (d.nav === n[0] ? 'on' : '') + '" data-a="dset" data-k="nav" data-v="' + n[0] + '">' + n[1] + '</button>'; }).join('') + '</div>' +
-      '<p class="mut sm">Cristal y Dock usan desenfoque solo en modo Completo. En modo Ligero se ven sólidos.</p></section>';
+      '<p class="mut sm">Cristal, Dock y Píldora usan desenfoque solo en rendimiento Alto. En modo Ligero se ven sólidos.</p></section>';
     h += '<section class="af-sec flat"><h3>Estilo</h3><label class="fl"><span class="fl-t">Redondeo de tarjetas: <b id="rad-v">' + (+d.radius || 16) + '</b> px</span><input type="range" min="6" max="26" step="1" data-d="radius" value="' + (+d.radius || 16) + '"></label>' +
-      '<span class="fl-t">Efectos por defecto</span>' + seg('perf', [['auto', 'Automático'], ['full', 'Completo'], ['lite', 'Ligero']], d.perf || 'auto') + '<p class="mut sm">Cada persona puede cambiarlo en su celular desde Más &gt; Rendimiento.</p></section>';
+      '<span class="fl-t">Efectos por defecto</span>' + seg('perf', [['auto', 'Automático'], ['full', 'Alto'], ['lite', 'Ligero']], d.perf || 'auto') + '<p class="mut sm">Cada persona puede cambiarlo en su celular desde el menú ☰ &gt; Rendimiento.</p></section>';
     h += '<section class="af-sec flat"><h3>Funciones</h3>' + [['calendar', 'Calendario mensual'], ['news', 'Noticias'], ['lineups', 'Alineaciones en cada partido'], ['sanctions', 'Sanciones'], ['channels', 'Canales de TV']].map(function (x) {
       return '<label class="chk"><input type="checkbox" data-feat="' + x[0] + '"' + (f[x[0]] ? ' checked' : '') + '><span>' + x[1] + '</span></label>';
     }).join('') + '</section>';

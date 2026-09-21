@@ -4,7 +4,7 @@
   'use strict';
   var LSL = w.LSL, S = LSL.store, U = LSL.u, T = LSL.t, esc = U.esc, P = LSL.prefs;
   var UI = LSL.ui = {};
-  var VS = UI.vs = { seg: 'list', filter: 'all', lim: 20, month: null, day: null, lseg: 'table', full: false, ncat: '' };
+  var VS = UI.vs = { seg: 'list', filter: 'all', lim: 20, month: null, day: null, lseg: 'table', full: false, ncat: '', cup: '', nsi: 0 };
   var V = UI.views = {};
 
   /* ---------- piezas base ---------- */
@@ -22,6 +22,14 @@
   }
   UI.crest = crest;
 
+  function avatar(p, size) {
+    size = size || 40;
+    var st = ' style="--s:' + size + 'px"';
+    if (p && p.photo) return '<img class="av"' + st + ' src="' + esc(p.photo) + '" alt="">';
+    return '<span class="av"' + st + '>' + esc(((p && p.name) || '?').trim().charAt(0).toUpperCase()) + '</span>';
+  }
+  UI.avatar = avatar;
+
   function tint(h, a) {
     var c1 = (h && h.color) || '#27C4C9', c2 = (a && a.color) || '#FFD226';
     return '--c1:' + esc(c1) + ';--c2:' + esc(c2);
@@ -35,11 +43,17 @@
   function statusText(m) {
     if (m.status === 'live') return m.minute ? String(m.minute).replace(/'$/, '') + "'" : 'En vivo';
     if (m.status === 'paused') return 'Descanso';
-    if (m.status === 'finished') return 'Final';
+    if (m.status === 'finished') return m.pens ? 'Final · pen. ' + m.pens : 'Final';
     return '';
   }
   function seg(items, cur, key) {
     return '<div class="seg" role="tablist">' + items.map(function (i) {
+      return '<button role="tab" aria-selected="' + (i[0] === cur) + '" class="' + (i[0] === cur ? 'on' : '') + '" data-seg="' + key + '" data-v="' + i[0] + '">' + esc(i[1]) + '</button>';
+    }).join('') + '</div>';
+  }
+  UI.seg = seg;
+  function segChips(items, cur, key) {
+    return '<div class="chips" role="tablist">' + items.map(function (i) {
       return '<button role="tab" aria-selected="' + (i[0] === cur) + '" class="' + (i[0] === cur ? 'on' : '') + '" data-seg="' + key + '" data-v="' + i[0] + '">' + esc(i[1]) + '</button>';
     }).join('') + '</div>';
   }
@@ -136,7 +150,7 @@
   }
   function chips(items, cur, attr) {
     return '<div class="chips" role="tablist">' + items.map(function (i) {
-      return '<button class="' + (i[0] === cur ? 'on' : '') + '" ' + attr + '="' + i[0] + '">' + esc(i[1]) + (i[2] ? '<em>' + i[2] + '</em>' : '') + '</button>';
+      return '<button class="' + (i[0] === cur ? 'on' : '') + '" ' + attr + '="' + esc(i[0]) + '">' + esc(i[1]) + (i[2] ? '<em>' + i[2] + '</em>' : '') + '</button>';
     }).join('') + '</div>';
   }
 
@@ -165,6 +179,125 @@
     return h;
   }
 
+  /* ---------- copas: cuadro de eliminatorias ---------- */
+  function roundInfo(name) {
+    var base = String(name || '').replace(/\s*[·\-–]\s*(ida|vuelta|partido\s*\d+)\s*$/i, '').trim() || 'Ronda', l = base.toLowerCase(), rank = 0;
+    if (/semi/.test(l)) rank = 3; else if (/cuart/.test(l)) rank = 2; else if (/octav/.test(l)) rank = 1; else if (/tercer|3er/.test(l)) rank = 4; else if (/final/.test(l)) rank = 5;
+    return { key: l, label: base, rank: rank };
+  }
+  function parseSc(x) { var m = /(\d+)\s*[-–:]\s*(\d+)/.exec(String(x || '')); return m ? [+m[1], +m[2]] : null; }
+  function buildTie(legs) {
+    legs.sort(function (a, b) { return T.ts(a.date) - T.ts(b.date); });
+    var A = legs[0].home, B = legs[0].away, ga = 0, gb = 0, done = true, live = false, any = false, last = legs[legs.length - 1], open = null;
+    legs.forEach(function (m) {
+      if (m.status !== 'finished') done = false;
+      if (isLive(m)) { live = true; open = m; }
+      if (m.status === 'upcoming') { if (!open) open = m; return; }
+      any = true;
+      var hs = +m.hs || 0, as = +m.as || 0;
+      if (m.home === A) { ga += hs; gb += as; } else { ga += as; gb += hs; }
+    });
+    var f = legs.length === 1 && legs[0].leg2 ? parseSc(legs[0].firstLeg) : null;
+    if (f) { ga += f[1]; gb += f[0]; any = true; }       // la ida no está cargada como partido: sale del texto "2-1"
+    var win = null, pa = null, pb = null, pn = parseSc(last.pens);
+    if (pn) { pa = last.home === A ? pn[0] : pn[1]; pb = last.home === A ? pn[1] : pn[0]; }
+    if (done) win = ga > gb ? A : gb > ga ? B : (pn ? (pa > pb ? A : pb > pa ? B : null) : null);
+    return { a: A, b: B, ga: any ? ga : null, gb: any ? gb : null, done: done, live: live, win: win, legs: legs, ts: T.ts(legs[0].date), pa: pa, pb: pb, open: (open || last).id };
+  }
+  function cupData(name) {
+    var ms = S.state.matches.filter(function (m) { return m.comp === 'copa' && (m.cup || 'Copa') === name; }), byR = {}, latest = 0;
+    ms.forEach(function (m) {
+      var ri = roundInfo(m.round), r = byR[ri.key] || (byR[ri.key] = { label: ri.label, rank: ri.rank, pairs: {} }), pk = [m.home, m.away].sort().join('|');
+      (r.pairs[pk] = r.pairs[pk] || []).push(m);
+      latest = Math.max(latest, T.ts(m.date));
+    });
+    var rounds = Object.keys(byR).map(function (k) {
+      var r = byR[k];
+      r.ties = Object.keys(r.pairs).map(function (pk) { return buildTie(r.pairs[pk]); });
+      r.ts = Math.min.apply(null, r.ties.map(function (t) { return t.ts; }));
+      return r;
+    }).sort(function (a, b) { return (a.rank - b.rank) || (a.ts - b.ts); });
+    rounds.forEach(function (r, i) {                      // cada llave queda junto a la de la ronda anterior
+      if (!i) { r.ties.sort(function (x, y) { return x.ts - y.ts; }); return; }
+      var pos = {}; rounds[i - 1].ties.forEach(function (t, k) { pos[t.a] = k; pos[t.b] = k; });
+      r.ties.forEach(function (t) { t.k = Math.min(pos[t.a] == null ? 99 : pos[t.a], pos[t.b] == null ? 99 : pos[t.b]); });
+      r.ties.sort(function (x, y) { return (x.k - y.k) || (x.ts - y.ts); });
+    });
+    var lastR = rounds[rounds.length - 1];
+    if (lastR && lastR.rank !== 5 && lastR.ties.length > 1) {   // camino que falta hasta la final
+      var prev = lastR;
+      while (prev.ties.length > 1 && prev.ties.length % 2 === 0) {
+        var ties = [];
+        for (var j = 0; j < prev.ties.length; j += 2) ties.push({ a: prev.ties[j].win || '', b: prev.ties[j + 1].win || '', ga: null, gb: null, legs: [], done: false, win: null, ph: true });
+        prev = { label: ties.length === 1 ? 'Final' : ties.length === 2 ? 'Semifinales' : ties.length === 4 ? 'Cuartos de final' : 'Siguiente ronda', rank: 9, ties: ties, ph: true };
+        rounds.push(prev);
+      }
+    }
+    var fin = rounds.filter(function (r) { return r.rank === 5 && r.ties.length === 1; })[0], champ = fin && fin.ties[0].done ? fin.ties[0].win : null;
+    return { name: name, rounds: rounds, champ: champ, ts: latest };
+  }
+  function cupList() {
+    var seen = {}, out = [];
+    S.state.matches.forEach(function (m) { if (m.comp === 'copa') { var n = m.cup || 'Copa'; if (!seen[n]) { seen[n] = 1; out.push(cupData(n)); } } });
+    return out.sort(function (a, b) { return (a.champ ? 1 : 0) - (b.champ ? 1 : 0) || b.ts - a.ts; });
+  }
+  function tieHTML(t) {
+    var A = S.team(t.a), B = S.team(t.b), dec = t.done && t.win;
+    function row(team, id, g) {
+      return '<span class="tr' + (dec ? (t.win === id ? ' w' : ' l') : '') + '">' + crest(team, 's') + '<span class="tn2">' + esc(team ? team.name : 'Por definir') + '</span><b>' + (g == null ? '' : g) + '</b></span>';
+    }
+    var sub = '';
+    if (t.legs.length > 1) {
+      sub = t.legs.map(function (m, i) {
+        var lb = i === 0 ? 'Ida' : i === t.legs.length - 1 ? 'Vuelta' : 'Partido ' + (i + 1);
+        if (m.status === 'upcoming') return lb + ' ' + T.dm(T.ts(m.date));
+        return lb + ' ' + (m.home === t.a ? (+m.hs || 0) + '-' + (+m.as || 0) : (+m.as || 0) + '-' + (+m.hs || 0));
+      }).join(' · ');
+    } else if (t.legs.length === 1) {
+      var m = t.legs[0]; sub = m.status === 'upcoming' ? T.dm(T.ts(m.date)) + ' · ' + T.time(T.ts(m.date)) : isLive(m) ? 'En vivo' : '';
+    } else sub = 'Por definir';
+    if (t.pa != null) sub += (sub ? ' · ' : '') + 'pen. ' + t.pa + '-' + t.pb;
+    var body = row(A, t.a, t.ga) + row(B, t.b, t.gb) + (sub ? '<small>' + esc(sub) + '</small>' : '');
+    return t.legs.length ? '<button class="tie' + (t.live ? ' live' : '') + '" data-match="' + esc(t.open) + '">' + body + '</button>' : '<div class="tie ph">' + body + '</div>';
+  }
+  function bracket(cup) {
+    var rs = cup.rounds;
+    return '<div class="bk-w"><div class="bk">' + rs.map(function (r, ri) {
+      var pairs = ri < rs.length - 1 && r.ties.length > 1 && r.ties.length % 2 === 0, body = '';
+      if (pairs) for (var i = 0; i < r.ties.length; i += 2) body += '<div class="bpair">' + tieHTML(r.ties[i]) + tieHTML(r.ties[i + 1]) + '</div>';
+      else body = r.ties.map(tieHTML).join('');
+      return '<div class="bcol"><h4>' + esc(r.label) + '</h4><div class="bl">' + body + '</div></div>';
+    }).join('') + '</div></div>';
+  }
+  function cupsView(cups) {
+    var sel = cups.filter(function (c) { return c.name === VS.cup; })[0] || cups[0], h = '';
+    VS.cup = sel.name;
+    if (cups.length > 1) h += chips(cups.map(function (c) { return [c.name, c.name]; }), sel.name, 'data-cupsel');
+    h += '<div class="cup-h">' + ic('trophy') + '<b>' + esc(sel.name) + '</b><span class="chip">' + (sel.champ ? 'Finalizada' : 'En juego') + '</span></div>';
+    if (sel.champ) { var ct = S.team(sel.champ); h += '<div class="champ">' + crest(ct, 'l') + '<span><small>Campeón</small><b>' + esc(ct ? ct.name : '') + '</b></span></div>'; }
+    return h + bracket(sel);
+  }
+
+  /* ---------- apilado de noticias (solo rendimiento Alto) ---------- */
+  function stackO(i, act, N) { var r = (i - act + N) % N; return r === 0 ? '0' : r === 1 ? '1' : r === 2 ? '2' : r === N - 1 ? 'p' : 'h'; }
+  UI.stackApply = function (ns) {
+    var cards = ns.querySelectorAll('.ns-i'), N = cards.length, act = VS.nsi;
+    [].forEach.call(cards, function (c, i) { c.setAttribute('data-o', stackO(i, act, N)); });
+    [].forEach.call(ns.querySelectorAll('.ns-d i'), function (d, i) { d.classList.toggle('on', i === act); });
+  };
+  function newsStack(list) {
+    var n = list.slice(0, 5), N = n.length;
+    if (N < 2) return '<div class="stack">' + n.map(newsRow).join('') + '</div>';
+    var act = Math.min(VS.nsi || 0, N - 1), h = '<div class="ns">';
+    VS.nsi = act;
+    n.forEach(function (x, i) {
+      h += '<button class="ns-i" data-o="' + stackO(i, act, N) + '" data-news="' + esc(x.id) + '" aria-label="' + esc(x.title) + '">' +
+        (x.img ? '<img class="ns-im" src="' + esc(x.img) + '" alt="" loading="lazy" decoding="async">' : '<span class="ns-im ph"></span>') +
+        '<span class="ns-t"><span class="nw-c">' + esc(x.cat) + ' · ' + T.rel(T.ts(x.date)) + '</span><b>' + esc(x.title) + '</b></span></button>';
+    });
+    return h + '<div class="ns-d">' + n.map(function (x, i) { return '<i' + (i === act ? ' class="on"' : '') + '></i>'; }).join('') + '</div></div>';
+  }
+
   /* ---------- pantallas ---------- */
   V.home = function () {
     var st = S.state, mm = S.sorted(), hm = heroMatch(), h = '';
@@ -180,8 +313,9 @@
     var rows = S.standings();
     if (rows.length) h += sec('Tabla', 'Completa', 'league', table(rows.slice(0, 5)));
     if (st.features.news && st.news.length) {
-      var ns = st.news.slice().sort(function (a, b) { return T.ts(b.date) - T.ts(a.date); }).slice(0, 2);
-      h += sec('Noticias', 'Ver todas', 'news', '<div class="stack">' + ns.map(newsRow).join('') + '</div>');
+      var ns = st.news.slice().sort(function (a, b) { return T.ts(b.date) - T.ts(a.date); });
+      var hi = document.documentElement.getAttribute('data-perf') === 'full';
+      h += sec('Noticias', 'Ver todas', 'news', hi ? newsStack(ns) : '<div class="stack">' + ns.slice(0, 2).map(newsRow).join('') + '</div>');
     }
     return h;
   };
@@ -208,11 +342,12 @@
   };
 
   V.league = function () {
-    var st = S.state, L = st.league, f = st.features, segs = [['table', 'Posiciones']];
+    var st = S.state, L = st.league, f = st.features, segs = [['table', 'Posiciones']], cups = cupList();
+    if (cups.length) segs.push(['cups', 'Copas']);
     if (f.sanctions) segs.push(['sanc', 'Sanciones']);
     segs.push(['rules', 'Reglamento']);
     if (!segs.some(function (s) { return s[0] === VS.lseg; })) VS.lseg = 'table';
-    var h = '<h1 class="h">Liga</h1><p class="sub">' + esc(L.season) + ' · ' + esc(L.seasonStatus) + '</p>' + seg(segs, VS.lseg, 'lseg');
+    var h = '<h1 class="h">Liga</h1><p class="sub">' + esc(L.season) + ' · ' + esc(L.seasonStatus) + '</p>' + segChips(segs, VS.lseg, 'lseg');
     if (VS.lseg === 'table') {
       var rows = S.standings();
       if (!rows.length) return h + empty('Sin equipos todavía', 'La tabla se arma sola con los partidos de Liga finalizados.');
@@ -223,6 +358,8 @@
       h += '<div class="tb-foot">' + (lg ? '<div class="tb-lg">' + lg + '</div>' : '<span></span>') +
         '<button class="lnk" data-act="full">' + (VS.full ? 'Ver resumida' : 'Ver completa') + '</button></div>';
       h += '<p class="note">Victoria ' + (+L.pointsWin) + ' pts · Empate ' + (+L.pointsDraw) + ' · Derrota ' + (+L.pointsLoss) + '</p>';
+    } else if (VS.lseg === 'cups') {
+      h += cupsView(cups);
     } else if (VS.lseg === 'sanc') {
       var ss = st.sanctions;
       if (!ss.length) return h + empty('Sin sancionados', 'Tarjetas, suspensiones y lesiones activas aparecen acá.');
@@ -257,21 +394,27 @@
     return h;
   };
 
-  V.more = function () {
-    var st = S.state, L = st.league, d = st.design, h = '<h1 class="h">Más</h1>';
-    if (L.info) h += '<section class="card prose"><h3>Sobre la liga</h3><p>' + esc(L.info) + '</p></section>';
-    var opts = '<option value="">Ninguno</option>' + S.state.teams.slice().sort(function (a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; }).map(function (t) {
-      return '<option value="' + esc(t.id) + '"' + (t.id === P.fav ? ' selected' : '') + '>' + esc(t.name) + '</option>';
-    }).join('');
-    h += '<section class="card"><h3>Mi equipo</h3><p class="mut">Resaltamos sus partidos y su lugar en la tabla.</p><select id="favsel" class="fld">' + opts + '</select></section>';
-    var mode = P.mode || 'auto', perf = P.perf || 'auto';
-    h += '<section class="card"><h3>Apariencia</h3>' + seg([['auto', 'Del sitio'], ['dark', 'Oscuro'], ['light', 'Claro']], mode, 'pmode') + '</section>';
-    h += '<section class="card"><h3>Rendimiento</h3><p class="mut">Ligero apaga animaciones y efectos para que todo vaya fluido en celulares de gama baja. Automático elige según tu equipo.</p>' +
-      seg([['auto', 'Automático'], ['full', 'Completo'], ['lite', 'Ligero']], perf, 'pperf') + '<p class="mut sm">Ahora: <b>' + (document.documentElement.getAttribute('data-perf') === 'lite' ? 'Ligero' : 'Completo') + '</b></p></section>';
+  V.profile = function () {
+    var p = LSL.profile.get() || { name: 'Invitado' }, t = S.team(P.fav), rows = S.standings(), pos = -1, row = null;
+    rows.forEach(function (r, i) { if (t && r.id === t.id) { pos = i; row = r; } });
+    var h = '<h1 class="h">Perfil</h1>';
+    h += '<section class="pf" style="--c1:' + esc((t && t.color) || '#27C4C9') + '"><div class="pf-av">' + avatar(p, 104) + (t ? '<span class="pf-tm">' + crest(t, 'm') + '</span>' : '') + '</div>' +
+      '<h2 class="pf-n">' + esc(p.name) + '</h2><p class="pf-s">' + (t ? esc(t.name) + (row ? ' · ' + (pos + 1) + '° · ' + row.pts + ' pts' : '') : 'Todavía no elegiste equipo') + '</p>' +
+      '<div class="btns pf-b"><button class="btn ghost sm" data-ob="photo">' + ic('camera') + 'Foto</button><button class="btn ghost sm" data-ob="name">' + ic('edit') + 'Nombre</button><button class="btn ghost sm" data-ob="team">' + ic('users') + 'Equipo</button></div></section>';
+    if (row) {
+      h += '<div class="pf-st">' + [['PJ', row.pj], ['G-E-P', row.g + '-' + row.e + '-' + row.p], ['DG', (row.dg > 0 ? '+' : '') + row.dg], ['Pts', row.pts]].map(function (x) { return '<div><b>' + x[1] + '</b><small>' + x[0] + '</small></div>'; }).join('') + '</div>';
+    }
+    if (t) {
+      var mine = S.sorted().filter(function (m) { return m.home === t.id || m.away === t.id; });
+      var nx = mine.filter(isLive)[0] || mine.filter(function (m) { return m.status === 'upcoming'; })[0];
+      var ls = mine.filter(function (m) { return m.status === 'finished'; }).pop();
+      if (nx) h += sec(isLive(nx) ? 'Tu equipo, en vivo' : 'Próximo de tu equipo', '', '', matchCard(nx));
+      if (ls) h += sec('Último resultado', '', '', matchCard(ls));
+    }
+    h += '<section class="card"><h3>Tutorial</h3><p class="mut">Repasá qué hay en cada pantalla, paso a paso.</p><div class="btns"><button class="btn ghost" data-ob="tour">' + ic('help') + 'Ver tutorial</button></div></section>';
     h += '<section class="card"><h3>App</h3><div class="btns">' +
       (LSL.installEvt ? '<button class="btn" data-act="install">' + ic('download') + 'Instalar en el celular</button>' : '') +
       '<button class="btn ghost" data-act="share">' + ic('share') + 'Compartir</button></div></section>';
-    h += '<p class="ver" id="ver-tap" data-secret>' + esc(L.name) + ' · v1.0</p>';
     return h;
   };
 
@@ -314,7 +457,7 @@
     var out = '<div class="mh" style="' + tint(h, a) + '"><div class="mh-top"><span class="chip comp-' + esc(m.comp) + '">' + esc(compLabel(m)) + '</span>' +
       (live ? '<span class="live"><i></i>' + esc(st) + '</span>' : (st ? '<span class="chip">' + st + '</span>' : '')) + '</div>' +
       '<div class="hero-row"><div class="tm">' + crest(h, 'x') + '<span class="hn" id="sheet-t">' + esc(h ? h.name : 'Equipo') + '</span></div><div class="hero-mid">' + mid + '</div><div class="tm">' + crest(a, 'x') + '<span class="hn">' + esc(a ? a.name : 'Equipo') + '</span></div></div>' +
-      '<p class="mh-sub">' + esc(T.long(ts)) + ' · ' + T.time(ts) + (m.leg2 && m.firstLeg ? ' · Ida: ' + esc(m.firstLeg) : '') + '</p></div>';
+      '<p class="mh-sub">' + esc(T.long(ts)) + ' · ' + T.time(ts) + (m.leg2 && m.firstLeg ? ' · Ida: ' + esc(m.firstLeg) : '') + (m.pens ? ' · Penales: ' + esc(m.pens) : '') + '</p></div>';
     out += '<div class="sb-in">' + seg(tabs, SH.tab, 'stab');
 
     if (SH.tab === 'sum') {
@@ -334,6 +477,7 @@
         m.round ? ['Fase', m.round] : null,
         m.leg2 ? ['Partido', 'Vuelta' + (m.firstLeg ? ' (ida: ' + m.firstLeg + ')' : '')] : null,
         ['Fecha', T.long(ts)], ['Horario', T.time(ts)],
+        m.pens ? ['Penales', m.pens] : null,
         m.stadium ? ['Estadio', m.stadium] : null
       ].filter(Boolean);
       out += '<div class="kv">' + rows.map(function (r) { return '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('');
@@ -355,10 +499,17 @@
       (n.summary ? '<p class="lead">' + esc(n.summary) + '</p>' : '') + paras.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') + '</div>';
   }
 
+  function aboutSheet() {
+    var L = S.state.league;
+    return '<div class="sb-in art"><span class="nw-c">' + esc(L.season) + ' · ' + esc(L.seasonStatus) + '</span><h2 id="sheet-t">' + esc(L.name) + '</h2>' +
+      String(L.info || 'Todavía no hay una descripción de la liga.').split(/\n+/).map(function (x) { return '<p>' + esc(x) + '</p>'; }).join('') + '</div>';
+  }
+
   UI.renderSheet = function () {
     if (!SH.open) return;
     var st = body.scrollTop, html = '';
     if (SH.type === 'match') { var m = S.match(SH.id); if (!m) return UI.closeSheet(); html = matchSheet(m); }
+    else if (SH.type === 'about') html = aboutSheet();
     else { var n = S.news(SH.id); if (!n) return UI.closeSheet(); html = newsSheet(n); }
     body.innerHTML = html; body.scrollTop = st;
   };
@@ -372,6 +523,7 @@
     sheet.classList.add('on'); document.documentElement.classList.add('lock');
     panel.style.transform = '';
     LSL.pushLayer(UI.hideSheet);
+    if (UI.onSheet) UI.onSheet();
   };
   UI.hideSheet = function () {
     if (!SH.open) return;
@@ -379,6 +531,7 @@
     document.documentElement.classList.remove('lock');
     var lite = document.documentElement.getAttribute('data-perf') === 'lite';
     closeTimer = setTimeout(function () { sheet.hidden = true; body.innerHTML = ''; }, lite ? 0 : 300);
+    if (UI.onSheet) UI.onSheet();
   };
   UI.closeSheet = function () { if (SH.open) LSL.popLayer(); };
 
@@ -386,7 +539,7 @@
     sheet = document.getElementById('sheet'); panel = sheet.querySelector('.panel'); body = document.getElementById('sbody');
     sheet.addEventListener('click', function (e) {
       if (e.target.closest('[data-close]')) return UI.closeSheet();
-      var t = e.target.closest('[data-seg="stab"]'); if (t) { SH.tab = t.getAttribute('data-v'); return UI.renderSheet(); }
+      var t = e.target.closest('[data-seg="stab"]'); if (t) { SH.tab = t.getAttribute('data-v'); UI.renderSheet(); if (UI.onSheet) UI.onSheet(); return; }
       var sd = e.target.closest('[data-side]'); if (sd) { SH.side = sd.getAttribute('data-side'); return UI.renderSheet(); }
     });
     /* arrastrar para cerrar (solo desde la manija) */

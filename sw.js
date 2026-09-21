@@ -3,7 +3,7 @@
    - Archivos propios: "stale-while-revalidate" (muestra lo guardado y actualiza por detrás).
    - data.js: primero red, y si no hay señal usa lo guardado.
    Al cambiar archivos de la app, subí el número de VERSION para forzar la limpieza. */
-const VERSION = 'lsl-v1';
+const VERSION = 'lsl-v2';
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/config.js', 'js/store.js', 'js/ui.js', 'js/app.js', 'data/data.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
