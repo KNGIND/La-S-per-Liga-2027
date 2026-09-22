@@ -110,3 +110,20 @@ input[type=range] { width: 100%; accent-color: var(--ac); height: 32px; }
 .am-c p { margin-bottom: 18px; font-size: 15.5px; }
 .am-b { display: flex; gap: 10px; }
 .am-b .btn { flex: 1; }
+
+/* Color: selector nativo + campo HEX libre (soporte para #RGB y #RRGGBB) */
+.clrf { display: flex; gap: 8px; align-items: center; }
+.clrp { -webkit-appearance: none; appearance: none; flex: none; width: 46px; height: 46px; padding: 3px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); }
+.clrp::-webkit-color-swatch-wrapper { padding: 0; }
+.clrp::-webkit-color-swatch { border: 0; border-radius: 8px; }
+.clrh { flex: 1; text-transform: uppercase; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.clrh.bad { border-color: var(--live); color: var(--live); }
+
+/* Nube: diagnóstico de conexión */
+.cl-diag { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.cl-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); font-size: 13px; }
+.cl-step .ic { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.cl-step.ok { color: #37D67A; } .cl-step.ok .ic { color: #37D67A; }
+.cl-step.bad { color: var(--live); } .cl-step.bad .ic { color: var(--live); }
+.cl-step b { display: block; color: var(--tx); font-weight: 700; }
+.cl-step small { display: block; margin-top: 2px; color: var(--mut); font-weight: 500; }
