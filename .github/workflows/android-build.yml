@@ -11,7 +11,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: set up JDK 21
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'zulu'
@@ -22,29 +22,65 @@ jobs:
         npm install @capacitor/core @capacitor/cli @capacitor/android
         npm install @capacitor/push-notifications
 
-    - name: Prepare Clean Web Directory
-      run: |
-        mkdir -p public_dist
-        cp -r css data icons js index.html manifest.webmanifest sw.js public_dist/ 2>/dev/null || true
-        cp *.png *.svg public_dist/ 2>/dev/null || true
-
     - name: Configure Capacitor App Name and Credentials
       run: |
-        npx cap init "La Súper Liga" "com.lasuperliga.app" --web-dir=public_dist
+        # Usamos "." porque tus archivos index.html, js y css están en la raíz del repositorio
+        npx cap init "La Súper Liga" "com.lasuperliga.app" --web-dir=.
         npx cap add android
 
-    - name: Sync Capacitor Projects
+    - name: Configure Firebase Services
       run: |
-        npx cap sync android
+        if [ -f google-services.json ]; then
+          cp google-services.json android/app/google-services.json
+        else
+          echo "google-services.json no encontrado, omitiendo Firebase"
+        fi
+
+    - name: Inject Custom App Icon (icon-512.png)
+      run: |
+        # Cambiado para usar icon-512.png que sí existe en tu repositorio actual
+        if [ -f icon-512.png ]; then
+          echo "¡Icono encontrado! Reemplazando íconos de Capacitor..."
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          for size in mdpi hdpi xxdpi xxhdpi xxxhdpi; do
+            mkdir -p android/app/src/main/res/mipmap-$size
+            cp icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher.png
+            cp icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher_round.png
+            cp icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher_foreground.png
+          done
+        else
+          echo "⚠️ ADVERTENCIA: No se encontró icon-512.png en la raíz."
+        fi
+
+    - name: Fix Permissions and Web Notifications
+      run: |
+        MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+        
+        # Permitir abrir la galería de fotos si es necesario
+        sed -i '/<\/application>/i \    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>' $MANIFEST_PATH
+        mkdir -p android/app/src/main/res/xml
+        echo -e '<?xml version="1.0" encoding="utf-8"?>\n<paths>\n    <external-path name="external_files" path="." />\n</paths>' > android/app/src/main/res/xml/file_paths.xml
+
+        # Dar permisos nativos de Internet y Notificaciones Push directos en Android
+        sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' $MANIFEST_PATH
+        sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' $MANIFEST_PATH
+
+        # Configurar la vista para que acepte alertas JavaScript y simule un navegador compatible
+        MAIN_ACTIVITY="android/app/src/main/java/com/lasuperliga/app/MainActivity.java"
+        if [ -f "$MAIN_ACTIVITY" ]; then
+          sed -i '/super.onCreate(savedInstanceState);/a \        android.webkit.WebView webView = (android.webkit.WebView) findViewById(android.text.Html.fromHtml("<p></p>").length());\n        if(webView != null) {\n            webView.getSettings().setJavaScriptEnabled(true);\n            webView.getSettings().setDomStorageEnabled(true);\n            webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);\n        }' $MAIN_ACTIVITY
+        fi
 
     - name: Build Android Project & Set Version
       run: |
         cd android
+        sed -i 's/versionName "1.0"/versionName "1.0"/g' app/build.gradle
+        sed -i 's/versionCode 1/versionCode 1/g' app/build.gradle
         ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: SuperLiga-APK
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: android/app/build/outputs/apk/debug/La-Super-Liga.apk
         
