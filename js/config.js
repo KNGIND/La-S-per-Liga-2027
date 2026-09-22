@@ -11,8 +11,8 @@
     La clave anon/publishable es pública por diseño: es seguro dejarla acá.
 */
 window.LSL_CONFIG = {
-  supabaseUrl: 'https://jzeyankmecxazxmycvdz.supabase.co'
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6ZXlhbmttZWN4YXp4bXljdmR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5OTc2OTgsImV4cCI6MjEwNTU3MzY5OH0.6hGYSlqr_7aSz2inG9rnD15QJwPwWU9Z808kZ5N3MLs'
+  supabaseUrl: '',      // ej: 'https://abcdxyz.supabase.co'
+  supabaseAnonKey: '',  // ej: 'eyJhbGciOi...' o 'sb_publishable_...'
   pollSeconds: 30,      // cada cuántos segundos revisa novedades si hay partido en vivo
   oneSignalAppId: ''    // opcional: App ID de OneSignal para notificaciones push (ver LEEME.md)
 };

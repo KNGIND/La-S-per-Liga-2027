@@ -3,11 +3,11 @@
    así los visitantes no pagan ni un byte de este código. */
 (function (w) {
   'use strict';
-  var LSL = w.LSL, S = LSL.store, U = LSL.u, T = LSL.t, esc = U.esc, UI = LSL.ui, ic = UI.ic;
+  var LSL = w.LSL, S = LSL.store, U = LSL.u, T = LSL.t, esc = U.esc, UI = LSL.ui, ic = UI.ic, CFG = w.LSL_CONFIG || {};
   var doc = document, html = doc.documentElement, root = doc.getElementById('admin-root');
   var A = LSL.admin = {};
   var tab = 'matches', mounted = false, mf = 'all', skip = false, imgs = {}, inT = 0, lastTab = '';
-  var TABS = [['matches', 'Partidos', 'ball'], ['teams', 'Equipos', 'users'], ['news', 'Noticias', 'news'], ['channels', 'Canales', 'tv'], ['league', 'Liga', 'trophy'], ['design', 'Diseño', 'sliders'], ['data', 'Datos', 'db']];
+  var TABS = [['matches', 'Partidos', 'ball'], ['teams', 'Equipos', 'users'], ['news', 'Noticias', 'news'], ['channels', 'Canales', 'tv'], ['league', 'Liga', 'trophy'], ['design', 'Diseño', 'sliders'], ['ann', 'Avisos', 'bell'], ['cloud', 'Nube', 'db'], ['data', 'Datos', 'db']];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
   var FORMS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2', '4-1-4-1', '4-5-1', '5-4-1', '4-1-2-3'].map(function (f) { return [f, f]; });
@@ -60,7 +60,9 @@
     } else if (f.t === 'textarea') {
       h += '<textarea class="fld ta" rows="' + (f.rows || 3) + '" data-k="' + k + '" placeholder="' + esc(f.ph || '') + '">' + esc(v) + '</textarea>';
     } else if (f.t === 'color') {
-      h += '<input class="fld clr" type="color" data-k="' + k + '" value="' + esc(v || '#000000') + '">';
+      var hv = U.hexOr(v, '#000000');
+      h += '<div class="clrf"><input class="fld clrp" type="color" data-k="' + k + '" data-clr="' + k + '" value="' + hv + '">' +
+        '<input class="fld clrh" type="text" inputmode="text" maxlength="7" placeholder="#RRGGBB" data-clrh="' + k + '" value="' + esc(hv) + '"></div>';
     } else if (f.t === 'image') {
       imgs[k] = v || '';
       h += '<div class="imgf" data-imgk="' + k + '">' + (v ? '<img class="imgf-p" src="' + esc(v) + '" alt="">' : '<span class="imgf-e">Sin imagen</span>') +
@@ -80,6 +82,7 @@
       if (!el) return;
       if (f.t === 'check') v = el.checked;
       else if (f.t === 'number') v = el.value === '' ? 0 : (+el.value || 0);
+      else if (f.t === 'color') v = U.hexOr(el.value, '#000000');
       else v = String(el.value).trim();
       out[f.k] = v;
     });
@@ -133,7 +136,7 @@
     var st = lastTab === tab ? b.scrollTop : 0; lastTab = tab;
     imgs = {};
     $('#adm-tabs').innerHTML = TABS.map(function (t) { return '<button class="' + (t[0] === tab ? 'on' : '') + '" data-a="tab" data-v="' + t[0] + '">' + ic(t[2]) + t[1] + '</button>'; }).join('');
-    b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, data: tData })[tab]();
+    b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[tab]();
     b.scrollTop = st;
     var on = $('#adm-tabs .on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
@@ -444,8 +447,15 @@
   function seg(k, list, cur) { return '<div class="seg">' + list.map(function (o) { return '<button class="' + (o[0] === cur ? 'on' : '') + '" data-a="dset" data-k="' + k + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
   function tDesign() {
     var d = S.state.design, f = S.state.features, b = S.state.banner;
-    var h = '<section class="af-sec flat"><h3>Colores</h3><div class="row2"><label class="fl half"><span class="fl-t">Color principal</span><input class="fld clr" type="color" data-d="accent" value="' + esc(d.accent) + '"></label><label class="fl half"><span class="fl-t">Color de destaque</span><input class="fld clr" type="color" data-d="accent2" value="' + esc(d.accent2) + '"></label></div>' +
-      '<span class="fl-t">Fondo (modo oscuro)</span><div class="swatches">' + Object.keys(BGN).map(function (k) { var c = LSL.BGS[k]; return '<button class="sw' + (d.bg === k ? ' on' : '') + '" data-a="dset" data-k="bg" data-v="' + k + '" style="--sw:' + c.bg + ';--sw2:' + c.card + '"><i></i>' + BGN[k] + '</button>'; }).join('') + '</div>' +
+    function dclr(k, l) {
+      var hv = U.hexOr(d[k], '#000000');
+      return '<label class="fl half"><span class="fl-t">' + l + '</span><div class="clrf"><input class="fld clrp" type="color" data-clr="d-' + k + '" value="' + hv + '"><input class="fld clrh" type="text" maxlength="7" placeholder="#RRGGBB" data-clrh="d-' + k + '" value="' + hv + '"></div></label>';
+    }
+    var custBg = LSL.palette({ bg: 'custom', bgCustom: d.bgCustom || '#0A1428' }).bg;
+    var h = '<section class="af-sec flat"><h3>Colores</h3><div class="row2">' + dclr('accent', 'Color principal') + dclr('accent2', 'Color de destaque') + '</div>' +
+      '<span class="fl-t">Fondo (modo oscuro)</span><div class="swatches">' + Object.keys(BGN).map(function (k) { var c = LSL.BGS[k]; return '<button class="sw' + (d.bg === k ? ' on' : '') + '" data-a="dset" data-k="bg" data-v="' + k + '" style="--sw:' + c.bg + ';--sw2:' + c.card + '"><i></i>' + BGN[k] + '</button>'; }).join('') +
+      '<button class="sw' + (d.bg === 'custom' ? ' on' : '') + '" data-a="dset" data-k="bg" data-v="custom" style="--sw:' + custBg + ';--sw2:' + custBg + '"><i></i>Personalizado</button></div>' +
+      (d.bg === 'custom' ? '<label class="fl"><span class="fl-t">Color de fondo (HEX)</span><div class="clrf"><input class="fld clrp" type="color" data-clr="d-bgCustom" value="' + U.hexOr(d.bgCustom, '#0A1428') + '"><input class="fld clrh" type="text" maxlength="7" placeholder="#RRGGBB" data-clrh="d-bgCustom" value="' + U.hexOr(d.bgCustom, '#0A1428') + '"></div></label>' : '') +
       '<span class="fl-t">Modo por defecto</span>' + seg('mode', [['dark', 'Oscuro'], ['light', 'Claro']], d.mode) + '</section>';
     h += '<section class="af-sec flat"><h3>Navegación inferior</h3><p class="mut sm">Tocá un estilo y probalo abajo (tocá los íconos de la vista previa).</p>' + navPreview(d.nav, 0) +
       '<div class="chips wrapc">' + NAVS.map(function (n) { return '<button class="' + (d.nav === n[0] ? 'on' : '') + '" data-a="dset" data-k="nav" data-v="' + n[0] + '">' + n[1] + '</button>'; }).join('') + '</div>' +
@@ -456,6 +466,64 @@
       return '<label class="chk"><input type="checkbox" data-feat="' + x[0] + '"' + (f[x[0]] ? ' checked' : '') + '><span>' + x[1] + '</span></label>';
     }).join('') + '</section>';
     h += '<section class="af-sec flat"><h3>Aviso destacado</h3><label class="chk"><input type="checkbox" data-ban="active"' + (b.active ? ' checked' : '') + '><span>Mostrar aviso arriba de todo</span></label><input class="fld" data-ban="text" placeholder="Texto del aviso" value="' + esc(b.text) + '"></section>';
+    return h;
+  }
+
+  /* ---------- AVISOS (notificaciones + actualización) ---------- */
+  function tAnn() {
+    var r = S.state.release || {};
+    var h = '<section class="af-sec flat"><h3>Actualización disponible</h3><p class="mut sm">Al publicar, cada celular que abra la app (o la tenga abierta) ve un aviso para actualizar. Usalo después de subir cambios a GitHub/Vercel, o para avisar de novedades en los datos.</p>' +
+      '<textarea class="fld ta" id="rl-notes" rows="2" placeholder="Qué cambió (opcional, se muestra en el aviso)">' + esc(r.notes || '') + '</textarea>' +
+      '<label class="chk"><input type="checkbox" id="rl-force"' + (r.force ? ' checked' : '') + '><span>Obligatoria (no se puede posponer)</span></label>' +
+      '<div class="btns"><button class="btn" data-a="rel-pub">Publicar actualización ahora</button></div>' +
+      (r.id ? '<p class="mut sm">Última publicada: ' + esc(T.short(T.ts(r.at))) + ' · ' + T.time(T.ts(r.at)) + (r.force ? ' · obligatoria' : '') + '</p>' : '') + '</section>';
+    h += '<h3 class="adm-h3">Notificaciones / avisos globales</h3>' + bar('Nuevo aviso', 'new-ann');
+    var an = S.state.announcements || [];
+    var LV = { info: 'Info', success: 'Éxito', warn: 'Aviso', error: 'Error' };
+    h += an.length ? '<div class="stack">' + an.map(function (a) {
+      return '<div class="ar"><div class="ar-m"><div class="ar-t wrap"><b>' + esc(a.title || '(sin título)') + '</b></div><div class="ar-s">' + esc(LV[a.level] || 'Info') + (a.active ? '' : ' · oculto') + (a.dismissible === false ? ' · fijo' : '') + '</div></div>' +
+        '<div class="ar-b"><button class="ib" data-a="edit-ann" data-id="' + esc(a.id) + '" aria-label="Editar">' + ic('edit') + '</button><button class="ib" data-a="del-ann" data-id="' + esc(a.id) + '" aria-label="Eliminar">' + ic('trash') + '</button></div></div>';
+    }).join('') + '</div>' : none('No hay avisos', 'Creá uno para notificar mantenimiento, errores o novedades.');
+    return h;
+  }
+  function annForm(id) {
+    var an = S.state.announcements || [], ex = id ? an.filter(function (a) { return a.id === id; })[0] : null;
+    var a = ex ? U.clone(ex) : { id: U.uid('an'), title: '', body: '', level: 'info', active: true, dismissible: true, expires: '' };
+    openForm({
+      title: ex ? 'Editar aviso' : 'Nuevo aviso',
+      fields: [
+        { k: 'title', l: 'Título', t: 'text' }, { k: 'body', l: 'Mensaje', t: 'textarea', rows: 3 },
+        { k: 'level', l: 'Tipo', t: 'select', o: [['info', 'Info'], ['success', 'Éxito'], ['warn', 'Aviso'], ['error', 'Error']] },
+        { k: 'active', l: 'Mostrar ahora', t: 'check' }, { k: 'dismissible', l: 'Se puede cerrar', t: 'check' },
+        { k: 'expires', l: 'Vence (opcional)', t: 'datetime-local' }
+      ],
+      values: a,
+      onSave: function (v) {
+        if (!v.title && !v.body) { toast('Poné un título o un mensaje.'); return false; }
+        var o = Object.assign({}, a, v);
+        S.commit(function (st) { st.announcements = st.announcements || []; var i = st.announcements.findIndex(function (x) { return x.id === o.id; }); if (i < 0) st.announcements.push(o); else st.announcements[i] = o; });
+      },
+      onDelete: ex ? function () { return ask('¿Eliminar este aviso?', 'Eliminar', true).then(function (ok) { if (!ok) return; S.commit(function (st) { st.announcements = (st.announcements || []).filter(function (x) { return x.id !== ex.id; }); }); closeForm(); toast('Aviso eliminado'); }); } : null
+    });
+  }
+
+  /* ---------- NUBE (conexión con Supabase) ---------- */
+  function clDiag(res) {
+    if (!res) return '';
+    return '<div class="cl-diag">' + res.steps.map(function (s) {
+      return '<div class="cl-step ' + (s.ok ? 'ok' : 'bad') + '">' + ic(s.ok ? 'check' : 'close') + '<div><b>' + esc(s.label) + '</b>' + (s.detail ? '<small>' + esc(s.detail) + '</small>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function tCloud() {
+    var cloud = S.mode === 'cloud', hasDev = S.hasDeviceConfig();
+    var h = '<section class="af-sec flat"><h3>Conexión con Supabase</h3><p class="mut sm">Pegá la URL y la clave <b>anon / publishable</b> de tu proyecto (Project Settings → API). Se guardan en este celular; los demás siguen usando lo que tenga <code>js/config.js</code>.</p>' +
+      '<label class="fl"><span class="fl-t">Project URL</span><input class="fld" id="cl-url" type="url" inputmode="url" placeholder="https://abcdxyz.supabase.co" value="' + esc(CFG.supabaseUrl || '') + '"></label>' +
+      '<label class="fl"><span class="fl-t">Clave anon / publishable</span><input class="fld" id="cl-key" type="text" placeholder="eyJhbGciOi… o sb_publishable_…" value="' + esc(CFG.supabaseAnonKey || '') + '"></label>' +
+      '<div class="btns"><button class="btn ghost" data-a="cl-test">' + ic('bolt') + 'Comprobar conexión</button><button class="btn" data-a="cl-save">Guardar y activar</button></div>' +
+      (hasDev ? '<div class="btns"><button class="btn ghost danger-t" data-a="cl-clear">Quitar de este dispositivo</button></div>' : '') +
+      '<div id="cl-res"></div></section>';
+    h += '<section class="af-sec flat"><h3>Estado</h3><p class="mut">Modo actual: <b>' + (cloud ? 'Nube' : 'Local') + '</b>' + (cloud ? ' · sesión: <b>' + (S.cloud.sess() ? esc(S.cloud.who() || 'activa') : 'sin iniciar') + '</b>' : '') + '</p>' +
+      (cloud ? '<p class="mut sm">Para publicar necesitás además iniciar sesión de administrador (pestaña Datos, o accedé de nuevo al panel).</p>' : '') + '</section>';
     return h;
   }
 
@@ -477,6 +545,10 @@
 
   /* ---------- eventos ---------- */
   root.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.target.id === 'lg-pass' || e.target.id === 'lg-mail')) doLogin(); });
+  root.addEventListener('blur', function (e) {
+    var hk = e.target.getAttribute && e.target.getAttribute('data-clrh'); if (!hk) return;
+    if (!U.hexn(e.target.value)) { var pk = $('[data-clr="' + hk + '"]', e.target.closest('.clrf')); if (pk) { e.target.value = pk.value.toUpperCase(); e.target.classList.remove('bad'); } }
+  }, true);
   root.addEventListener('change', function (e) {
     var el = e.target, f;
     if ((f = el.getAttribute('data-file'))) {               // subir imagen
@@ -505,7 +577,21 @@
     }
   });
   root.addEventListener('input', function (e) {
-    var el = e.target, k = el.getAttribute('data-d');
+    var el = e.target, hk;
+    function dsnKey(hk) { return hk.indexOf('d-') === 0 ? hk.slice(2) : ''; }
+    if ((hk = el.getAttribute('data-clrh'))) {                 // texto HEX -> color picker + valor guardado
+      var hex = U.hexn(el.value);
+      var pk = $('[data-clr="' + hk + '"]', el.closest('.clrf'));
+      if (hex) { el.classList.remove('bad'); if (pk) pk.value = hex; var dk1 = dsnKey(hk); if (dk1) { clearTimeout(inT); inT = setTimeout(function () { design(function (d) { d[dk1] = hex; }); }, 120); } }
+      else el.classList.add('bad');
+      return;
+    }
+    if ((hk = el.getAttribute('data-clr'))) {                   // color picker -> texto HEX
+      var th = el.closest('.clrf').querySelector('[data-clrh="' + hk + '"]'); if (th) { th.value = el.value.toUpperCase(); th.classList.remove('bad'); }
+      var dk2 = dsnKey(hk); if (dk2) design(function (d) { d[dk2] = el.value.toUpperCase(); });
+      return;
+    }
+    var k = el.getAttribute('data-d');
     if (!k) return;
     if (k === 'radius') { $('#rad-v').textContent = el.value; }
     clearTimeout(inT); inT = setTimeout(function () { design(function (d) { d[k] = k === 'radius' ? +el.value : el.value; }); }, 120);
@@ -537,6 +623,25 @@
       case 'new-sanc': return sancForm();
       case 'edit-sanc': return sancForm(id);
       case 'del-sanc': S.commit(function (st) { st.sanctions = st.sanctions.filter(function (s) { return s.id !== id; }); }); return toast('Sanción eliminada');
+      case 'new-ann': return annForm();
+      case 'edit-ann': return annForm(id);
+      case 'del-ann': return ask('¿Eliminar este aviso?', 'Eliminar', true).then(function (ok) { if (ok) { S.commit(function (st) { st.announcements = (st.announcements || []).filter(function (a) { return a.id !== id; }); }); toast('Aviso eliminado'); } });
+      case 'rel-pub': { var notes = $('#rl-notes').value.trim(), force = $('#rl-force').checked; S.commit(function (st) { st.release = { id: 'r' + Date.now(), notes: notes, at: new Date().toISOString(), force: force }; }); return toast('Actualización publicada'); }
+      case 'cl-test': {
+        var tu = $('#cl-url').value, tk = $('#cl-key').value, btn = el; btn.disabled = true;
+        $('#cl-res').innerHTML = '<p class="mut sm">Probando…</p>';
+        S.cloud.test(tu, tk, !!S.cloud.sess()).then(function (res) {
+          btn.disabled = false; $('#cl-res').innerHTML = clDiag(res);
+          toast(res.ok ? 'Conexión OK' : 'Hay un problema, mirá el detalle abajo');
+        });
+        return;
+      }
+      case 'cl-save': {
+        var su = $('#cl-url').value.trim(), sk = $('#cl-key').value.trim();
+        if (!su || !sk) { toast('Completá la URL y la clave.'); return; }
+        S.saveConfig(su, sk); toast('Guardado. Iniciá sesión para poder publicar (pestaña Datos).'); return render();
+      }
+      case 'cl-clear': return ask('¿Quitar la configuración de Supabase de este dispositivo y volver a modo local?', 'Quitar', true).then(function (ok) { if (!ok) return; S.clearConfig(); toast('Modo local activado'); render(); });
       case 'league-save': { var out = {}; read($('#lg-form'), LFIELDS, out); if (!out.name) return toast('Poné el nombre de la liga.'); S.commit(function (st) { Object.assign(st.league, out); }); return toast('Datos de la liga guardados'); }
       case 'f-cancel': return closeForm();
       case 'f-save': return saveForm();
@@ -562,7 +667,7 @@
       case 'navp': { var bar = $('#navp .nav-bar'); bar.style.setProperty('--i', v); $$('#navp .nav-i').forEach(function (b, i) { b.classList.toggle('on', i === +v); }); return; }
       case 'export': download('data.js', S.exportJS()); return toast('Descargando data.js');
       case 'discard': return ask('¿Descartar tus cambios y volver a los datos publicados?', 'Descartar', true).then(function (ok) { if (ok) { S.discardDraft(); location.reload(); } });
-      case 'push': S.setStatus('saving'); return S.cloud.push(S.state).then(function () { S.setStatus('ok'); toast('Datos subidos'); }).catch(function (x) { S.setStatus('error', x.message); toast(x.message); });
+      case 'push': S.setStatus('saving'); return S.cloud.push(S.state, true).then(function () { S.setStatus('ok'); toast('Datos subidos'); }).catch(function (x) { S.setStatus('error', x.message); toast(x.message); });
       case 'logout': if (S.mode === 'cloud') S.cloud.logout(); else { try { sessionStorage.removeItem('lsl:adm'); } catch (x) { } } return close();
       case 'setpass': {
         var p1 = $('#np1').value, p2 = $('#np2').value;

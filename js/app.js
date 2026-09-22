@@ -22,8 +22,18 @@
   LSL.BGS = BGS;
 
   /* ---------- diseño / tema / rendimiento ---------- */
+  /* Fondo del modo oscuro: paleta fija o "custom" (cualquier HEX; si es muy claro se oscurece para que el texto se lea) */
+  function palette(d) {
+    if (d.bg === 'custom') {
+      var c = U.hexn(d.bgCustom) || BGS.navy.bg, k = 0;
+      while (U.lum(c) > 0.34 && k++ < 8) c = U.mix(c, '#000000', 0.2);
+      return { bg: c, bg2: U.mix(c, '#FFFFFF', 0.04), card: U.mix(c, '#FFFFFF', 0.075), card2: U.mix(c, '#FFFFFF', 0.125), line: U.mix(c, '#FFFFFF', 0.19) };
+    }
+    return BGS[d.bg] || BGS.navy;
+  }
+  LSL.palette = palette;
   function applyDesign() {
-    var d = S.state.design, ac = d.accent || '#27C4C9', ac2 = d.accent2 || '#FFD226', b = BGS[d.bg] || BGS.navy;
+    var d = S.state.design, ac = U.hexOr(d.accent, '#27C4C9'), ac2 = U.hexOr(d.accent2, '#FFD226'), b = palette(d);
     var css = ':root{--ac:' + ac + ';--ac2:' + ac2 + ';--on-ac:' + U.ink(ac) + ';--ac-soft:' + U.alpha(ac, 0.16) +
       ';--acg1:' + U.mix(ac, '#000000', 0.4) + ';--acg2:' + U.mix(U.hue(ac, 48), '#000000', 0.32) + ';--r:' + (+d.radius || 16) + 'px}' +
       ':root[data-theme=dark]{--bg:' + b.bg + ';--bg2:' + b.bg2 + ';--card:' + b.card + ';--card2:' + b.card2 + ';--line:' + b.line + ';--act:' + ac + ';--pts:' + ac2 + '}' +
@@ -35,7 +45,7 @@
     var m = (P.mode && P.mode !== 'auto') ? P.mode : (S.state.design.mode === 'light' ? 'light' : 'dark');
     root.setAttribute('data-theme', m);
     var mt = $('meta[name=theme-color]');
-    if (mt) mt.setAttribute('content', m === 'light' ? '#EEF3F7' : (BGS[S.state.design.bg] || BGS.navy).bg);
+    if (mt) mt.setAttribute('content', m === 'light' ? '#EEF3F7' : palette(S.state.design).bg);
   }
   function autoPerf() {
     if (LSL.probeLite) return 'lite';
@@ -56,16 +66,22 @@
     for (i = 0; i < mm.length; i++) if (mm[i].status === 'live' || mm[i].status === 'paused') return mm[i];
     return null;
   }
+  /* Etiqueta de temporada: "TEMP. 5" + punto de color según el estado (En curso / Pretemporada / En pausa / Finalizada) */
+  function seasonBadge(L) {
+    var raw = String(L.season || '').trim(); if (!raw) return '';
+    var val = raw.replace(/^Temporada\s*/i, '').trim() || raw, st = String(L.seasonStatus || '');
+    var k = /pre/i.test(st) ? 'pre' : /pausa/i.test(st) ? 'pause' : /final/i.test(st) ? 'end' : 'live';
+    return '<span class="season" data-st="' + k + '" title="' + esc(raw + (st ? ' · ' + st : '')) + '"><i></i><span class="ss-l">Temp.</span><b>' + esc(val) + '</b></span>';
+  }
   function renderHeader() {
     var L = S.state.league, top = $('#top'), lm = liveMatch();
     doc.title = L.name || 'La Súper Liga';
     top.className = 'top' + (lm ? ' has-live' : '');
-    top.innerHTML = '<button class="ib menu-btn" id="menu-btn" data-menu aria-label="Abrir menú" aria-haspopup="dialog">' + UI.ic('menu') + '</button>' +
+    top.innerHTML = '<button class="ib menu-btn' + (DR.open ? ' open' : '') + '" id="menu-btn" data-menu aria-label="Abrir menú" aria-haspopup="dialog" aria-expanded="' + (DR.open ? 'true' : 'false') + '"><span class="hb" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
       '<button class="logo" id="logo" data-secret aria-label="' + esc(L.name) + '">' +
       (L.logo ? '<img class="mark img" src="' + esc(L.logo) + '" alt="">' : '<span class="mark">' + esc((L.short || 'LSL').slice(0, 4)) + '</span>') +
-      '<span class="brand">' + esc(L.name) + '</span></button><span class="sp"></span>' +
-      (lm ? '<button class="livechip" data-match="' + esc(lm.id) + '"><i></i>En vivo</button>'
-        : '<span class="season"><i></i>' + esc(String(L.season || '').replace(/^Temporada\s*/i, 'T')) + '</span>');
+      '<span class="brand-w"><span class="brand">' + esc(L.name) + '</span>' + (L.tagline ? '<small class="tag">' + esc(L.tagline) + '</small>' : '') + '</span></button><span class="sp"></span>' +
+      (lm ? '<button class="livechip" data-match="' + esc(lm.id) + '"><i></i>En vivo</button>' : '') + seasonBadge(L);
   }
   function renderBanner() {
     var b = S.state.banner, el = $('#banner');
@@ -73,6 +89,29 @@
     if (!b.active || !b.text || seen) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     el.innerHTML = '<span>' + esc(b.text) + '</span><button class="ib" data-act="bn-x" aria-label="Cerrar aviso">' + UI.ic('close') + '</button>';
+  }
+
+  /* ---------- avisos globales (los crea el admin en Avisos) ---------- */
+  var K_ANX = 'lsl:annx', ANN_IC = { info: 'info', success: 'check', warn: 'warn', error: 'warn' };
+  function annKey(a) { return a.id + '@' + (a.at || ''); }
+  function annList() {
+    var now = Date.now(), gone = LSL.ls.get(K_ANX, []) || [];
+    return (S.state.announcements || []).filter(function (a) {
+      if (!a || !a.active || !(a.title || a.body)) return false;
+      var ex = a.expires ? T.ts(a.expires) : 0; if (ex && ex < now) return false;
+      return !(a.dismissible !== false && gone.indexOf(annKey(a)) > -1);
+    });
+  }
+  function renderAnn() {
+    var el = $('#ann'); if (!el) return;
+    var list = annList();
+    el.hidden = !list.length;
+    el.innerHTML = list.map(function (a) {
+      var lv = ANN_IC[a.level] ? a.level : 'info';
+      return '<div class="ann-i lv-' + lv + '" role="' + (lv === 'error' || lv === 'warn' ? 'alert' : 'status') + '"><span class="ann-ic">' + UI.ic(ANN_IC[lv]) + '</span><div class="ann-t">' +
+        (a.title ? '<b>' + esc(a.title) + '</b>' : '') + (a.body ? '<span>' + esc(a.body) + '</span>' : '') + '</div>' +
+        (a.dismissible !== false ? '<button class="ib" data-act="ann-x" data-id="' + esc(annKey(a)) + '" aria-label="Cerrar aviso">' + UI.ic('close') + '</button>' : '') + '</div>';
+    }).join('');
   }
 
   /* ---------- navegación inferior ---------- */
@@ -174,19 +213,36 @@
   }
 
   /* ---------- capas y botón "atrás" de Android ----------
-     Atrás: 1) cierra lo que esté abierto (ventanita, menú, tutorial…)
-            2) si no hay nada que cerrar, avisa; con un segundo "atrás" se sale de la app. */
-  var layers = [], armed = false, armT = 0;
-  function pushBuf() { try { history.pushState({ lsl: 'buf' }, ''); } catch (e) { } }
-  LSL.pushLayer = function (close) { layers.push(close); try { history.pushState({ lsl: 'layer' }, ''); } catch (e) { } };
-  LSL.popLayer = function () { if (layers.length) history.back(); };
-  function disarm() { if (!armed) return; armed = false; clearTimeout(armT); pushBuf(); }
+     Atrás: 1) cierra lo que esté abierto (noticia/partido, menú, panel, tutorial…)
+            2) si estás en otra pestaña, vuelve a la pestaña anterior
+            3) en el inicio avisa "Presioná de nuevo para salir"; con un segundo atrás sale.
+     IMPORTANTE: Chrome salta (ignora al volver) las entradas de historial creadas por una página que todavía no recibió
+     ningún toque. Por eso la entrada "colchón" y las capas se agregan recién después del primer toque del usuario. */
+  var layers = [], armed = false, armT = 0, active = false, pending = [];
+  function rawPush(kind) { try { history.pushState({ lsl: kind }, ''); } catch (e) { } }
+  function place(kind) { if (active) rawPush(kind); else pending.push(kind); }
+  function pushBuf() { place('buf'); }
+  function activate() {
+    if (active) return; active = true;
+    ['click', 'keydown', 'touchend'].forEach(function (ev) { doc.removeEventListener(ev, activate, true); });
+    pending.forEach(rawPush); pending = [];
+  }
+  ['click', 'keydown', 'touchend'].forEach(function (ev) { doc.addEventListener(ev, activate, true); });
+  LSL.pushLayer = function (close) { layers.push(close); place('layer'); };
+  LSL.popLayer = function () {
+    if (!layers.length) return;
+    if (active) return history.back();
+    var k = pending.lastIndexOf('layer'); if (k > -1) pending.splice(k, 1);   // todavía no llegó al historial real
+    layers.pop()();
+  };
+  function disarm() { if (!armed) return; armed = false; clearTimeout(armT); rawPush('buf'); }
   w.addEventListener('popstate', function () {
     if (armed) { history.back(); return; }                   // segundo "atrás": seguimos hacia atrás y se sale
     var c = layers.pop();
     if (c) { c(); return; }
-    armed = true; UI.toast('Volvé a presionar atrás para salir', 2000);
-    armT = setTimeout(function () { if (armed) { armed = false; pushBuf(); } }, 2000);
+    if (tabStack.length) { go(tabStack.pop(), false, true); rawPush('buf'); return; }   // vuelve a la pestaña anterior
+    armed = true; UI.toast('Presioná de nuevo para salir', 2000);
+    armT = setTimeout(function () { if (armed) { armed = false; rawPush('buf'); } }, 2000);
   });
   doc.addEventListener('pointerdown', disarm, true);
 
@@ -203,6 +259,7 @@
     if (LSL.installEvt) items += '<button data-act="install">' + ic('download') + 'Instalar en el celular</button>';
     if (CFG.oneSignalAppId) items += '<button data-act="push">' + ic('bell') + 'Notificaciones</button>';
     items += '<button data-act="tour">' + ic('help') + 'Ver tutorial</button>';
+    if (S.state.release && S.state.release.id) items += '<button data-act="upd-check">' + ic('download') + 'Buscar actualizaciones</button>';
     return '<div class="dr-scrim" data-dr-close></div><aside class="dr-p" role="dialog" aria-modal="true" aria-label="Menú">' +
       '<header class="dr-h"><button class="dr-me" data-drgo="profile">' + UI.avatar(p, 46) + '<span><b>' + esc(p ? p.name : 'Invitado') + '</b><small>' + esc(t ? t.name : 'Sin equipo') + '</small></span></button>' +
       '<button class="ib dr-x" data-dr-close aria-label="Cerrar menú">' + ic('close') + '</button></header>' +
@@ -344,6 +401,8 @@
       var a = el.getAttribute('data-act');
       if (a === 'full') { VS.full = !VS.full; rerender(); }
       else if (a === 'more') { VS.lim += 20; rerender(); }
+      else if (a === 'ann-x') { var gone = LSL.ls.get(K_ANX, []) || []; gone.push(el.getAttribute('data-id')); LSL.ls.set(K_ANX, gone.slice(-60)); renderAnn(); }
+      else if (a === 'upd-check') { closeDrawer(function () { LSL.upd && LSL.upd.check(true); }); }
       else if (a === 'bn-x') { try { sessionStorage.setItem('lsl:bn', S.state.banner.text); } catch (x) { } renderBanner(); }
       else if (a === 'install' && LSL.installEvt) { LSL.installEvt.prompt(); LSL.installEvt = null; closeDrawer(); rerender(); }
       else if (a === 'share') {
@@ -359,7 +418,9 @@
     }
   }
 
-  /* ---------- apilado de noticias: deslizá de costado para pasar de tarjeta ---------- */
+  /* ---------- apilado de noticias: deslizá de costado para pasar de tarjeta ----------
+     Aislado del layout: mientras se arrastra no se repinta la pantalla (por eso rerender() se frena con `swiping`),
+     y solo se mueve la tarjeta (transform propio), nunca el documento ni la barra de navegación. */
   function initStack() {
     var st = null, sup = 0;
     doc.addEventListener('pointerdown', function (e) {
@@ -372,12 +433,13 @@
       if (!st.drag) {
         if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { st = null; return; }
         if (Math.abs(dx) < 8) return;
-        st.drag = true; st.card = st.ns.querySelector('.ns-i[data-o="0"]'); st.ns.classList.add('drag');
+        st.drag = true; swiping = true; st.card = st.ns.querySelector('.ns-i[data-o="0"]'); st.ns.classList.add('drag');
         try { st.ns.setPointerCapture(e.pointerId); } catch (x) { }
       }
       st.dx = dx;
       if (st.card) st.card.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 24) + 'deg)';
-    });
+      e.preventDefault();
+    }, { passive: false });
     function end(e) {
       if (!st || e.pointerId !== st.id) return;
       var s = st; st = null;
@@ -392,6 +454,8 @@
         if (navigator.vibrate) { try { navigator.vibrate(6); } catch (x) { } }
         saveSoon();
       }
+      swiping = false;
+      if (deferRender) { deferRender = false; rerender(); }
     }
     doc.addEventListener('pointerup', end); doc.addEventListener('pointercancel', end);
     doc.addEventListener('click', function (e) { if (Date.now() < sup && e.target.closest && e.target.closest('.ns')) { e.stopPropagation(); e.preventDefault(); } }, true);
@@ -441,11 +505,53 @@
   }
   LSL.afterProfile = function () { buildNav(); renderHeader(); renderDrawer(); rerender(); };
 
-  /* ---------- arranque ---------- */
+  /* ---------- actualizaciones "in-app" ----------
+     El admin publica una actualización (Panel → Avisos → "Publicar actualización ahora"), lo que cambia
+     state.release.id. Cada celular guarda el último id que vio; si cambia, avisa con un modal y ofrece
+     "Actualizar ahora": simula la descarga/instalación, refresca el service worker y recarga la página. */
+  var K_REL = 'lsl:rel';
+  function checkUpdate(manual) {
+    var rel = S.state.release || {}, id = String(rel.id || '').trim(), seen = LSL.ls.get(K_REL, '');
+    if (!id) { if (manual) UI.toast('No hay ninguna actualización publicada.'); return; }
+    if (id === seen) { if (manual) UI.toast('Ya tenés la última versión.'); return; }
+    if (!seen) { LSL.ls.set(K_REL, id); return; }           // primera vez que se ve el sitio: solo toma nota, no interrumpe
+    showUpdateModal(rel, id);
+  }
+  function showUpdateModal(rel, id) {
+    var host = $('#upd-root'); if (!host || host.childElementCount) return;
+    host.innerHTML = '<div class="upd-scrim"></div><div class="upd-c" role="dialog" aria-modal="true" aria-labelledby="upd-t">' +
+      '<div class="upd-ic">' + UI.ic('download') + '</div><h2 id="upd-t">Hay una actualización</h2>' +
+      '<p>' + esc(rel.notes || 'Hay cambios nuevos disponibles.') + '</p>' +
+      '<div class="upd-bar" hidden><i></i></div>' +
+      '<div class="upd-b"><button class="btn" data-upd="go">Actualizar ahora</button>' + (rel.force ? '' : '<button class="btn ghost" data-upd="later">Más tarde</button>') + '</div></div>';
+    root.classList.add('lock');
+    host.addEventListener('click', function (e) {
+      var a = e.target.closest('[data-upd]'); if (!a) return;
+      if (a.getAttribute('data-upd') === 'later') { LSL.ls.set(K_REL, id); host.innerHTML = ''; root.classList.remove('lock'); return; }
+      installUpdate(rel, id, host);
+    });
+  }
+  function installUpdate(rel, id, host) {
+    var bar = host.querySelector('.upd-bar'), i = bar.querySelector('i'); bar.hidden = false;
+    [].forEach.call(host.querySelectorAll('button'), function (b) { b.disabled = true; });
+    var p = 0, tm = setInterval(function () {
+      p = Math.min(100, p + 16 + Math.random() * 22); i.style.width = p + '%';
+      if (p >= 100) {
+        clearTimeout(tm); LSL.ls.set(K_REL, id);
+        var done = function () { location.reload(); };
+        if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.update(); }); done(); }).catch(done);
+        else done();
+      }
+    }, 220);
+  }
+  LSL.upd = { check: checkUpdate };
+
+  /* ---------- arranque ---------- */  /* ---------- arranque ---------- */
   function onData() {
-    applyDesign(); renderHeader(); renderBanner(); buildNav(); renderDrawer();
+    applyDesign(); renderHeader(); renderBanner(); renderAnn(); buildNav(); renderDrawer();
     if (!S.state.features.news && cur === 'news') cur = 'home';
     if (!LSL.adminOpen) { rerender(); if (UI.sh.open) UI.renderSheet(); }
+    checkUpdate(false);
   }
   LSL.refreshView = onData;
 
@@ -460,8 +566,9 @@
     else if (TABS.some(function (t) { return t[0] === h; })) cur = h;
     if (cur === 'news' && !S.state.features.news) cur = 'home';
     try { history.replaceState({ lsl: 'base' }, ''); } catch (e) { }
+    if (navigator.userActivation && navigator.userActivation.hasBeenActive) active = true;
     pushBuf();
-    applyDesign(); renderHeader(); renderBanner(); buildNav(); UI.initSheet(); render(true);
+    applyDesign(); renderHeader(); renderBanner(); renderAnn(); buildNav(); UI.initSheet(); render(true);
     try { history.replaceState(history.state, '', '#/' + cur); } catch (e) { }
     if (pendingScroll) w.scrollTo(0, pendingScroll);
     if (pendingSheet) {

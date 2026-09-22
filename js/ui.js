@@ -17,7 +17,7 @@
     s = s || 'm';
     if (!t) return '<span class="crest ' + s + '"><b>?</b></span>';
     if (t.logo) return '<img class="crest ' + s + '" src="' + esc(t.logo) + '" alt="" loading="lazy" decoding="async">';
-    var c1 = t.color || '#27C4C9', c2 = t.color2 || c1;
+    var c1 = U.hexOr(t.color, '#27C4C9'), c2 = U.hexOr(t.color2, c1);
     return '<span class="crest ' + s + '" style="--c1:' + esc(c1) + ';--c2:' + esc(c2) + ';color:' + U.ink(c1) + '"><b>' + esc((t.short || t.name || '?').slice(0, s === 's' ? 1 : 3)) + '</b></span>';
   }
   UI.crest = crest;
@@ -31,7 +31,7 @@
   UI.avatar = avatar;
 
   function tint(h, a) {
-    var c1 = (h && h.color) || '#27C4C9', c2 = (a && a.color) || '#FFD226';
+    var c1 = U.hexOr(h && h.color, '#27C4C9'), c2 = U.hexOr(a && a.color, '#FFD226');
     return '--c1:' + esc(c1) + ';--c2:' + esc(c2);
   }
   function compLabel(m) {
@@ -398,7 +398,7 @@
     var p = LSL.profile.get() || { name: 'Invitado' }, t = S.team(P.fav), rows = S.standings(), pos = -1, row = null;
     rows.forEach(function (r, i) { if (t && r.id === t.id) { pos = i; row = r; } });
     var h = '<h1 class="h">Perfil</h1>';
-    h += '<section class="pf" style="--c1:' + esc((t && t.color) || '#27C4C9') + '"><div class="pf-av">' + avatar(p, 104) + (t ? '<span class="pf-tm">' + crest(t, 'm') + '</span>' : '') + '</div>' +
+    h += '<section class="pf" style="--c1:' + esc(U.hexOr(t && t.color, '#27C4C9')) + '"><div class="pf-av">' + avatar(p, 104) + (t ? '<span class="pf-tm">' + crest(t, 'm') + '</span>' : '') + '</div>' +
       '<h2 class="pf-n">' + esc(p.name) + '</h2><p class="pf-s">' + (t ? esc(t.name) + (row ? ' · ' + (pos + 1) + '° · ' + row.pts + ' pts' : '') : 'Todavía no elegiste equipo') + '</p>' +
       '<div class="btns pf-b"><button class="btn ghost sm" data-ob="photo">' + ic('camera') + 'Foto</button><button class="btn ghost sm" data-ob="name">' + ic('edit') + 'Nombre</button><button class="btn ghost sm" data-ob="team">' + ic('users') + 'Equipo</button></div></section>';
     if (row) {
@@ -436,7 +436,7 @@
       for (var i = 0; i < n; i++) { r.push(lineup[idx++] || { n: '', name: '—' }); }
       out.push(r);
     });
-    var c1 = (team && team.color) || '#27C4C9';
+    var c1 = U.hexOr(team && team.color, '#27C4C9');
     var h = '<div class="pitch" style="--pc:' + esc(c1) + ';--pi:' + U.ink(c1) + '"><span class="pf">' + esc(formation || '') + '</span>';
     for (var r = out.length - 1; r >= 0; r--) {
       h += '<div class="prow">' + out[r].map(function (p) {
@@ -555,11 +555,11 @@
     });
   };
 
-  /* ---------- toast ---------- */
+  /* ---------- toast (kind: '' | 'warn' | 'err' cambia el color) ---------- */
   var toastT;
-  UI.toast = LSL.toast = function (msg, ms) {
+  UI.toast = LSL.toast = function (msg, ms, kind) {
     var el = document.getElementById('toast'); if (!el) return;
-    el.textContent = msg; el.classList.add('on'); clearTimeout(toastT);
+    el.textContent = msg; el.className = 'toast on' + (kind ? ' ' + kind : ''); clearTimeout(toastT);
     toastT = setTimeout(function () { el.classList.remove('on'); }, ms || 2200);
   };
 })(window);
