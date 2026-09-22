@@ -398,12 +398,12 @@
     sess: function () { return LS.get(K_AUTH); },
     who: function () { var s = C.sess(); return s && s.m || ''; },
     fetchStamp: function () {
-      return fetch(base + '/rest/v1/lsl_state?id=eq.1&select=updated_at', { headers: { apikey: key }, cache: 'no-store' })
+      return fetch(base + '/rest/v1/lsl_state?id=eq.1&select=updated_at&t=' + Date.now(), { headers: { apikey: key, 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (rows) { return rows && rows[0] ? rows[0].updated_at : null; });
     },
     fetchState: function () {
-      return fetch(base + '/rest/v1/lsl_state?id=eq.1&select=data,updated_at', { headers: { apikey: key }, cache: 'no-store' })
+      return fetch(base + '/rest/v1/lsl_state?id=eq.1&select=data,updated_at&t=' + Date.now(), { headers: { apikey: key, 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (rows) { return rows && rows[0] || null; });
     },
