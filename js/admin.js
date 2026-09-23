@@ -6,8 +6,18 @@
   var LSL = w.LSL, S = LSL.store, U = LSL.u, T = LSL.t, esc = U.esc, UI = LSL.ui, ic = UI.ic, CFG = w.LSL_CONFIG || {};
   var doc = document, html = doc.documentElement, root = doc.getElementById('admin-root');
   var A = LSL.admin = {};
-  var tab = 'matches', mounted = false, mf = 'all', skip = false, imgs = {}, inT = 0, lastTab = '';
-  var TABS = [['matches', 'Partidos', 'ball'], ['teams', 'Equipos', 'users'], ['news', 'Noticias', 'news'], ['channels', 'Canales', 'tv'], ['league', 'Liga', 'trophy'], ['design', 'Diseño', 'sliders'], ['ann', 'Avisos', 'bell'], ['cloud', 'Nube', 'db'], ['data', 'Datos', 'db']];
+  var tab = 'matches', mounted = false, mf = 'all', skip = false, imgs = {}, inT = 0, lastTab = '', editMode = false;
+  var TABS = [
+    ['matches', 'Partidos', 'ball', 'Crear y editar encuentros', 'c1'],
+    ['teams', 'Equipos', 'users', 'Altas, bajas y plantillas', 'c2'],
+    ['news', 'Noticias', 'news', 'Publicar novedades', 'c3'],
+    ['channels', 'Canales', 'tv', 'Dónde ver los partidos', 'c4'],
+    ['league', 'Liga', 'trophy', 'Nombre, logo, puntos', 'c5'],
+    ['design', 'Diseño', 'sliders', 'Colores, navegación, estilo', 'c6'],
+    ['ann', 'Avisos', 'bell', 'Notificaciones y actualizaciones', 'c7'],
+    ['cloud', 'Nube', 'db', 'Conexión con Supabase', 'c8'],
+    ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9']
+  ];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
   var FORMS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2', '4-1-4-1', '4-5-1', '5-4-1', '4-1-2-3'].map(function (f) { return [f, f]; });
@@ -96,8 +106,32 @@
     LSL.pushLayer(hide);
     if (isAuthed()) panel(); else login();
   };
-  function hide() { mounted = false; LSL.adminOpen = false; root.innerHTML = ''; html.classList.remove('lock'); LSL.refreshView(); }
+  function hide() { mounted = false; LSL.adminOpen = false; section = null; if (editMode) exitEditMode(true); root.innerHTML = ''; html.classList.remove('lock'); LSL.refreshView(); }
   function close() { LSL.popLayer(); }
+  function backToMenu() { section = null; render(); }
+
+  /* ---------- modo edición: oculta el panel y deja tocar la app real de fondo ---------- */
+  var editBar = null;
+  function enterEditMode() {
+    if (editMode) return;
+    editMode = true; LSL.editMode = true;
+    var admEl = $('#adm'); if (admEl) admEl.style.display = 'none';
+    html.classList.remove('lock'); html.classList.add('adm-edit-on');
+    editBar = doc.createElement('div'); editBar.className = 'edt-bar';
+    editBar.innerHTML = '<span class="edt-bar-i">' + ic('cursor') + '</span><span class="edt-bar-t">Editando · mantené presionado algo marcado</span><button class="btn sm" id="edt-exit">Salir</button>';
+    doc.body.appendChild(editBar);
+    editBar.querySelector('#edt-exit').addEventListener('click', function () { exitEditMode(); });
+    LSL.pushLayer(function () { exitEditMode(true); });
+  }
+  function exitEditMode(fromPop) {
+    if (!editMode) return;
+    editMode = false; LSL.editMode = false;
+    html.classList.remove('adm-edit-on');
+    if (editBar) { editBar.remove(); editBar = null; }
+    var admEl = $('#adm'); if (admEl) admEl.style.display = '';
+    html.classList.add('lock');
+    if (!fromPop) LSL.popLayer();
+  }
 
   function login() {
     var cloud = S.mode === 'cloud';
@@ -116,9 +150,10 @@
   }
 
   /* ---------- estructura del panel ---------- */
+  var section = null;   // null = menú principal · 'matches'/'teams'/etc = dentro de una sección
   function panel() {
-    root.innerHTML = '<div class="adm" id="adm"><header class="adm-h"><button class="ib" data-a="close" aria-label="Cerrar panel">' + ic('close') + '</button><h2>Administración</h2><span class="sp"></span><button class="adm-st" id="adm-st" data-a="tab" data-v="data"></button></header>' +
-      '<nav class="adm-tabs" id="adm-tabs"></nav><div class="adm-b" id="adm-b"></div></div>';
+    root.innerHTML = '<div class="adm" id="adm"><header class="adm-h"><button class="ib" data-a="' + (section ? 'menu' : 'close') + '" aria-label="' + (section ? 'Volver' : 'Cerrar panel') + '">' + ic(section ? 'chev-l' : 'close') + '</button><h2 id="adm-title">Administración</h2><span class="sp"></span><button class="adm-st" id="adm-st" data-a="section" data-v="data"></button></header>' +
+      '<div class="adm-b" id="adm-b"></div></div>';
     status(); render();
   }
   function status() {
@@ -131,14 +166,32 @@
   S.on('sync', status);
   S.on('change', function () { if (!mounted || skip) return; requestAnimationFrame(function () { if ($('#adm-b') && !$('#adm-form')) render(); }); });
 
+  function menuHTML() {
+    return '<button class="am-edit-cta" data-a="edit-mode"><span class="am-ic"><span class="am-pulse"></span>' + ic('cursor') + '</span><span class="am-tx"><b>Editar la página</b><small>Mantené presionado cualquier texto marcado para cambiarlo al instante</small></span><span class="am-go">' + ic('chev-r') + '</span></button>' +
+      '<div class="adm-menu">' + TABS.map(function (t) {
+        return '<button class="am-card ' + t[4] + '" data-a="section" data-v="' + t[0] + '"><span class="am-ic">' + ic(t[2]) + '</span><span class="am-tx"><b>' + esc(t[1]) + '</b><small>' + esc(t[3]) + '</small></span><span class="am-go">' + ic('chev-r') + '</span></button>';
+      }).join('') + '</div>';
+  }
   function render() {
     var b = $('#adm-b'); if (!b) return;
-    var st = lastTab === tab ? b.scrollTop : 0; lastTab = tab;
+    var key = section || '__menu__';
+    var st = lastTab === key ? b.scrollTop : 0; lastTab = key;
     imgs = {};
-    $('#adm-tabs').innerHTML = TABS.map(function (t) { return '<button class="' + (t[0] === tab ? 'on' : '') + '" data-a="tab" data-v="' + t[0] + '">' + ic(t[2]) + t[1] + '</button>'; }).join('');
-    b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[tab]();
+    var t = $('#adm-title');
+    var back = $('[data-a]', $('.adm-h'));
+    if (!section) {
+      if (t) t.textContent = 'Administración';
+      var closeBtn = $('.adm-h .ib');
+      if (closeBtn) { closeBtn.setAttribute('data-a', 'close'); closeBtn.setAttribute('aria-label', 'Cerrar panel'); closeBtn.innerHTML = ic('close'); }
+      b.innerHTML = menuHTML();
+    } else {
+      var meta = TABS.filter(function (x) { return x[0] === section; })[0];
+      if (t) t.textContent = meta ? meta[1] : 'Administración';
+      var backBtn = $('.adm-h .ib');
+      if (backBtn) { backBtn.setAttribute('data-a', 'menu'); backBtn.setAttribute('aria-label', 'Volver'); backBtn.innerHTML = ic('chev-l'); }
+      b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[section]();
+    }
     b.scrollTop = st;
-    var on = $('#adm-tabs .on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
   function bar(label, act) { return '<div class="adm-bar"><button class="btn" data-a="' + act + '">' + ic('plus') + label + '</button></div>'; }
   function none(t, s) { return '<div class="empty"><b>' + esc(t) + '</b><span>' + esc(s || '') + '</span></div>'; }
@@ -603,6 +656,9 @@
     switch (a) {
       case 'close': return close();
       case 'login': return doLogin();
+      case 'edit-mode': return enterEditMode();
+      case 'section': section = v; tab = v; render(); LSL.pushLayer(backToMenu); return;
+      case 'menu': return close();
       case 'tab': tab = v; return render();
       case 'mf': mf = v; return render();
       case 'new-match': return matchForm();

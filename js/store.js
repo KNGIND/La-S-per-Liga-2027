@@ -119,7 +119,7 @@
     return {
       meta: { rev: 0, updatedAt: '', schema: 1 },
       league: { name: 'La Súper Liga', short: 'LSL', season: 'Temporada 1', seasonStatus: 'En curso', tagline: '', info: '', rules: '', pointsWin: 3, pointsDraw: 1, pointsLoss: 0, zoneTop: 0, zoneBottom: 0, logo: '' },
-      design: { accent: '#27C4C9', accent2: '#FFD226', bg: 'navy', bgCustom: '#0A1428', mode: 'dark', nav: 'floating', radius: 16, perf: 'auto' },
+      design: { accent: '#27C4C9', accent2: '#FFD226', bg: 'navy', bgCustom: '#0A1428', mode: 'dark', nav: 'floating', radius: 16, perf: 'auto', navLabels: {}, drawerLabels: {} },
       features: { calendar: true, news: true, lineups: true, sanctions: true, channels: true },
       banner: { active: false, text: '' },
       release: { id: '', notes: '', at: '', force: false },

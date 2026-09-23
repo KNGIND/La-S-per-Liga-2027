@@ -77,10 +77,10 @@
     var L = S.state.league, top = $('#top'), lm = liveMatch();
     doc.title = L.name || 'La Súper Liga';
     top.className = 'top' + (lm ? ' has-live' : '');
-    top.innerHTML = '<button class="ib menu-btn' + (DR.open ? ' open' : '') + '" id="menu-btn" data-menu aria-label="Abrir menú" aria-haspopup="dialog" aria-expanded="' + (DR.open ? 'true' : 'false') + '"><span class="hb" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
-      '<button class="logo" id="logo" data-secret aria-label="' + esc(L.name) + '">' +
+    top.innerHTML = '<button class="ib menu-btn' + (DR.open ? ' open' : '') + '" id="menu-btn" data-menu data-edit="nav.menuBtn" aria-label="Abrir menú" aria-haspopup="dialog" aria-expanded="' + (DR.open ? 'true' : 'false') + '"><span class="hb" aria-hidden="true"><i></i><i></i><i></i></span></button>' +
+      '<button class="logo" id="logo" data-secret data-edit="league.logo" aria-label="' + esc(L.name) + '">' +
       (L.logo ? '<img class="mark img" src="' + esc(L.logo) + '" alt="">' : '<span class="mark">' + esc((L.short || 'LSL').slice(0, 4)) + '</span>') +
-      '<span class="brand-w"><span class="brand">' + esc(L.name) + '</span>' + (L.tagline ? '<small class="tag">' + esc(L.tagline) + '</small>' : '') + '</span></button><span class="sp"></span>' +
+      '<span class="brand-w"><span class="brand" data-edit="league.name">' + esc(L.name) + '</span>' + (L.tagline ? '<small class="tag" data-edit="league.tagline">' + esc(L.tagline) + '</small>' : '') + '</span></button><span class="sp"></span>' +
       (lm ? '<button class="livechip" data-match="' + esc(lm.id) + '"><i></i>En vivo</button>' : '') + seasonBadge(L);
   }
   function renderBanner() {
@@ -117,12 +117,13 @@
   /* ---------- navegación inferior ---------- */
   function visibleTabs() { var f = S.state.features; return TABS.filter(function (t) { return t[0] !== 'news' || f.news; }); }
   function buildNav() {
-    var tabs = visibleTabs(), i = 0, pr = LSL.profile.get();
+    var tabs = visibleTabs(), i = 0, pr = LSL.profile.get(), nl = S.state.design.navLabels || {};
     tabs.forEach(function (t, k) { if (t[0] === cur) i = k; });
     nav.setAttribute('data-nav', S.state.design.nav || 'floating');
     nav.innerHTML = '<div class="nav-bar" style="--n:' + tabs.length + ';--i:' + i + '"><span class="nav-ind"></span>' + tabs.map(function (t) {
       var ico = (t[0] === 'profile' && pr && pr.photo) ? '<img class="nav-av" src="' + esc(pr.photo) + '" alt="">' : UI.ic(t[2]);
-      return '<button class="nav-i' + (t[0] === 'matches' ? ' c' : '') + (t[0] === cur ? ' on' : '') + '" data-go="' + t[0] + '"' + (t[0] === cur ? ' aria-current="page"' : '') + '><span class="ico">' + ico + '</span><span class="lb">' + t[1] + '</span></button>';
+      var lbl = nl[t[0]] || t[1];
+      return '<button class="nav-i' + (t[0] === 'matches' ? ' c' : '') + (t[0] === cur ? ' on' : '') + '" data-go="' + t[0] + '" data-edit="nav.label.' + t[0] + '"' + (t[0] === cur ? ' aria-current="page"' : '') + '><span class="ico">' + ico + '</span><span class="lb">' + esc(lbl) + '</span></button>';
     }).join('') + '</div>';
   }
   function setActive() {
@@ -252,21 +253,22 @@
     var p = LSL.profile.get(), t = S.team(P.fav), L = S.state.league, ic = UI.ic;
     var perf = P.perf || 'auto', mode = P.mode || 'auto';
     var items = '';
-    if (L.info) items += '<button data-act="about">' + ic('info') + 'Sobre la liga</button>';
-    items += '<button data-act="rules">' + ic('book') + 'Reglamento</button>';
-    if (S.state.features.sanctions) items += '<button data-act="sanc">' + ic('lock') + 'Sanciones</button>';
-    items += '<button data-act="share">' + ic('share') + 'Compartir</button>';
-    if (LSL.installEvt) items += '<button data-act="install">' + ic('download') + 'Instalar en el celular</button>';
-    if (CFG.oneSignalAppId) items += '<button data-act="push">' + ic('bell') + 'Notificaciones</button>';
-    items += '<button data-act="tour">' + ic('help') + 'Ver tutorial</button>';
-    if (S.state.release && S.state.release.id) items += '<button data-act="upd-check">' + ic('download') + 'Buscar actualizaciones</button>';
+    var dl = S.state.design.drawerLabels || {};
+    if (L.info) items += '<button data-act="about" data-edit="drawer.label.about">' + ic('info') + esc(dl.about || 'Sobre la liga') + '</button>';
+    items += '<button data-act="rules" data-edit="drawer.label.rules">' + ic('book') + esc(dl.rules || 'Reglamento') + '</button>';
+    if (S.state.features.sanctions) items += '<button data-act="sanc" data-edit="drawer.label.sanc">' + ic('lock') + esc(dl.sanc || 'Sanciones') + '</button>';
+    items += '<button data-act="share" data-edit="drawer.label.share">' + ic('share') + esc(dl.share || 'Compartir') + '</button>';
+    if (LSL.installEvt) items += '<button data-act="install" data-edit="drawer.label.install">' + ic('download') + esc(dl.install || 'Instalar en el celular') + '</button>';
+    if (CFG.oneSignalAppId) items += '<button data-act="push" data-edit="drawer.label.push">' + ic('bell') + esc(dl.push || 'Notificaciones') + '</button>';
+    items += '<button data-act="tour" data-edit="drawer.label.tour">' + ic('help') + esc(dl.tour || 'Ver tutorial') + '</button>';
+    if (S.state.release && S.state.release.id) items += '<button data-act="upd-check" data-edit="drawer.label.updcheck">' + ic('download') + esc(dl.updcheck || 'Buscar actualizaciones') + '</button>';
     return '<div class="dr-scrim" data-dr-close></div><aside class="dr-p" role="dialog" aria-modal="true" aria-label="Menú">' +
       '<header class="dr-h"><button class="dr-me" data-drgo="profile">' + UI.avatar(p, 46) + '<span><b>' + esc(p ? p.name : 'Invitado') + '</b><small>' + esc(t ? t.name : 'Sin equipo') + '</small></span></button>' +
       '<button class="ib dr-x" data-dr-close aria-label="Cerrar menú">' + ic('close') + '</button></header>' +
       '<div class="dr-b"><section class="dr-c"><h3>Apariencia</h3>' + UI.seg([['auto', 'Del sitio'], ['dark', 'Oscuro'], ['light', 'Claro']], mode, 'pmode') + '</section>' +
       '<section class="dr-c" id="dr-perf"><h3>Rendimiento</h3><p class="mut sm">Ligero apaga animaciones y efectos para celulares de gama baja. Alto activa desenfoque, animaciones y el apilado de noticias.</p>' +
       UI.seg([['auto', 'Automático'], ['full', 'Alto'], ['lite', 'Ligero']], perf, 'pperf') + '<p class="mut sm dr-now">Ahora: <b>' + (lite() ? 'Ligero' : 'Alto') + '</b></p></section>' +
-      '<nav class="dr-l">' + items + '</nav></div><footer class="dr-f">' + esc(L.name) + ' · v2.0</footer></aside>';
+      '<nav class="dr-l">' + items + '</nav></div><footer class="dr-f" data-edit="drawer.footer">' + esc(dl.footer || (L.name + ' · v2.0')) + '</footer></aside>';
   }
   function renderDrawer() {
     var d = $('#drawer'); if (!d || !DR.open) return;
@@ -302,7 +304,10 @@
     UI.toast('Abriendo panel…', 1200);
     var l = doc.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/admin.css'; doc.head.appendChild(l);
     var s = doc.createElement('script'); s.src = 'js/admin.js';
-    s.onload = function () { LSL.admin.open(); };
+    s.onload = function () {
+      LSL.admin.open();
+      if (!LSL.editTouch) { var es = doc.createElement('script'); es.src = 'js/edit.js'; doc.head.appendChild(es); }
+    };
     s.onerror = function () { UI.toast('No se pudo cargar el panel. Revisá tu conexión.'); };
     doc.head.appendChild(s);
   };
