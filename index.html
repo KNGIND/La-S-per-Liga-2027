@@ -21,12 +21,58 @@ var r=false;try{r=sessionStorage.getItem('lsl:alive')==='1'||document.wasDiscard
 d.setAttribute('data-launch',r?'resume':'fresh');})();
 </script>
 
+<!-- ---------- Editor de código en vivo: consulta temprana ----------
+     Una sola consulta a Supabase (tabla lsl_code), antes de pedir CSS o JS.
+     Tiempo límite corto: si tarda o falla, sigue todo con los archivos de
+     este paquete, como si el editor de código no existiera.
+     El resultado queda en window.__LSL_CODE__ = { ok, preview, files:{ruta:{published,draft}} } -->
+<script src="js/config.js"></script>
+<script src="data/data.js"></script>
+<script>
+window.__LSL_CODE_READY__ = new Promise(function (resolve) {
+  var CFG = window.LSL_CONFIG || {};
+  var base = (CFG.supabaseUrl || '').replace(/\/+$/, ''), key = CFG.supabaseAnonKey || '';
+  var ALL = ['index.html', 'css/styles.css', 'css/admin.css', 'css/onboard.css', 'data/data.js', 'js/store.js', 'js/ui.js', 'js/app.js', 'js/admin.js', 'js/edit.js', 'js/onboard.js', 'js/config.js'];
+  var out = { ok: false, preview: false, files: {} };
+  if (!base || !key) { resolve(out); return; }
+  try { out.preview = sessionStorage.getItem('lsl:codepreview') === 'true' || localStorage.getItem('lsl:codepreview') === 'true'; } catch (e) { }
+  var done = false;
+  var timer = setTimeout(function () { if (!done) { done = true; resolve(out); } }, 2500);
+  fetch(base + '/rest/v1/lsl_code?select=path,published,draft&path=in.(' + ALL.map(encodeURIComponent).join(',') + ')&t=' + Date.now(), { headers: { apikey: key, 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      if (done) return; done = true; clearTimeout(timer);
+      (rows || []).forEach(function (row) { out.files[row.path] = row; });
+      out.ok = true; resolve(out);
+    })
+    .catch(function () { if (!done) { done = true; clearTimeout(timer); resolve(out); } });
+});
+</script>
+
 <!-- Una sola tipografía web (títulos y números). El texto usa la fuente del sistema: cero descarga. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap"></noscript>
 <link rel="stylesheet" href="css/styles.css">
+<script>
+/* Si hay un override PUBLICADO (o, para el admin en vista previa, un borrador)
+   de css/styles.css, lo agrega ENCIMA del original ni bien está listo — así la
+   cascada CSS hace que gane el override, y si tiene errores de sintaxis el
+   navegador simplemente ignora esas líneas sueltas (nunca rompe la página).
+   Lo mismo para data/data.js: como solo hace "window.LSL_DATA = {...}", volver
+   a correrlo acá simplemente reemplaza esa variable antes de que store.js la
+   lea más abajo — sin tocar el archivo original que ya se cargó arriba. */
+window.__LSL_CODE_READY__.then(function (data) {
+  window.__LSL_CODE__ = data;
+  var row = data.files['css/styles.css'];
+  var css = row && (data.preview && row.draft != null ? row.draft : row.published);
+  if (css) { var st = document.createElement('style'); st.id = 'lsl-code-override-css'; st.setAttribute('data-lsl-override', 'css/styles.css'); st.textContent = css; document.head.appendChild(st); }
+  var drow = data.files['data/data.js'];
+  var djs = drow && (data.preview && drow.draft != null ? drow.draft : drow.published);
+  if (djs) { try { var ds = document.createElement('script'); ds.setAttribute('data-lsl-override', 'data/data.js'); ds.text = djs; document.head.appendChild(ds); } catch (e) { } }
+});
+</script>
 </head>
 <body>
 
@@ -107,10 +153,68 @@ d.setAttribute('data-launch',r?'resume':'fresh');})();
 
 <noscript><p style="padding:24px;font-family:sans-serif">Necesitás activar JavaScript para ver La Súper Liga.</p></noscript>
 
-<script src="js/config.js" defer></script>
-<script src="data/data.js" defer></script>
-<script src="js/store.js" defer></script>
-<script src="js/ui.js" defer></script>
-<script src="js/app.js" defer></script>
+<script>
+/* ---------- Bootloader de JS del editor de código en vivo ----------
+   Reusa la consulta a Supabase que ya arrancó en el <head> (window.__LSL_CODE_READY__).
+   store.js/ui.js/app.js se cargan EN ORDEN estricto (uno después de que el
+   anterior terminó), igual que si tuvieran defer, porque dependen entre sí.
+   Si algo tarda o falla, sigue con los archivos originales de este paquete:
+   nunca se queda la página sin arrancar.
+
+   "Vigilante" anti-código-roto: antes de usar un override, marca en
+   sessionStorage que lo está por intentar. app.js, ni bien termina de armar
+   la pantalla principal, confirma "arrancó bien" y borra esa marca. Si el
+   código tenía un error y la página nunca llegó a confirmar, LA PRÓXIMA vez
+   que se abra (a los pocos segundos, porque el usuario reintenta, o en la
+   visita de otra persona) esa marca sigue puesta: significa que la vez
+   anterior no llegó a arrancar, así que esta vez se ignoran los overrides
+   por completo y se usan los archivos originales — la app nunca queda
+   rota para siempre, como mucho falla UNA carga. */
+(function () {
+  var FILES = ['js/store.js', 'js/ui.js', 'js/app.js'];
+  var anchor = document.currentScript;
+  var WATCHDOG_KEY = 'lsl:code_boot_pending';
+
+  function runInOrder(list) {
+    var i = 0;
+    function next() {
+      if (i >= list.length) return;
+      var item = list[i++]; var s = document.createElement('script');
+      s.setAttribute('data-lsl-src', item.path);
+      if (item.code) { s.setAttribute('data-lsl-override', item.kind); s.text = item.code; anchor.parentNode.insertBefore(s, anchor.nextSibling); next(); }
+      else { s.src = item.path; s.onload = next; s.onerror = next; anchor.parentNode.insertBefore(s, anchor.nextSibling); }
+    }
+    next();
+  }
+  function loadOriginal() { runInOrder(FILES.map(function (p) { return { path: p }; })); }
+
+  var wasPending = false;
+  try { wasPending = sessionStorage.getItem(WATCHDOG_KEY) === '1'; } catch (e) { }
+
+  if (!window.__LSL_CODE_READY__ || wasPending) {
+    // Si la carga anterior con overrides no llegó a confirmar que arrancó bien,
+    // esta vez directamente no se intenta de nuevo: van los archivos originales.
+    if (wasPending) {
+      try { sessionStorage.removeItem(WATCHDOG_KEY); localStorage.setItem('lsl:code_last_crash', JSON.stringify({ at: new Date().toISOString() })); } catch (e) { }
+    }
+    loadOriginal(); return;
+  }
+
+  var settled = false;
+  var timer = setTimeout(function () { if (!settled) { settled = true; loadOriginal(); } }, 2500);
+  window.__LSL_CODE_READY__.then(function (data) {
+    if (settled) return; settled = true; clearTimeout(timer);
+    window.__LSL_CODE__ = data;
+    var anyOverride = FILES.some(function (p) { var r = data.files[p]; return r && (r.published != null || (data.preview && r.draft != null)); });
+    if (anyOverride) { try { sessionStorage.setItem(WATCHDOG_KEY, '1'); } catch (e) { } }
+    runInOrder(FILES.map(function (p) {
+      var row = data.files[p];
+      var useDraft = data.preview && row && row.draft != null;
+      var code = row && (useDraft ? row.draft : row.published);
+      return code ? { path: p, code: code, kind: useDraft ? 'draft' : 'published' } : { path: p };
+    }));
+  }, loadOriginal);
+})();
+</script>
 </body>
 </html>
