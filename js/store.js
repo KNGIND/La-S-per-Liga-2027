@@ -503,4 +503,148 @@
       });
     }
   };
+
+  /* ---------- Editor de código en vivo (S.code) ----------
+     Guarda el código fuente de los archivos editables en una tabla aparte de
+     Supabase (lsl_code), separada de lsl_state (los datos de la liga).
+     Cada fila: { path: 'js/app.js', published: '...', draft: '...', history: [...] }
+     - "draft"     = tu borrador, solo lo ves vos (marcado con lsl:codepreview en este dispositivo)
+     - "published" = lo que baja el bootloader de index.html para todo el mundo
+     - "history"   = las últimas versiones publicadas, para poder restaurar          */
+  var K_CODEPREV = 'lsl:codepreview';
+
+  /* ---------- Fragmentos ("agregar código sin tocar el resto") ----------
+     Cada fragmento se envuelve en un comentario marcador (HTML/CSS/JS según
+     el tipo de archivo) para poder reconocerlo y sacarlo limpio después.
+     Lo que se guarda en "draft"/"published" sigue siendo el archivo COMPLETO
+     de siempre — el bootloader de index.html no sabe que existen fragmentos,
+     solo ve el texto ya armado, así que no hace falta tocarlo. */
+  function snMarker(path) {
+    return /\.html?$/i.test(path)
+      ? { o: '<!-- LSL:SNIPPET id=', m: ' -->', c: '<!-- /LSL:SNIPPET id=', e: ' -->' }
+      : { o: '/* LSL:SNIPPET id=', m: ' */', c: '/* /LSL:SNIPPET id=', e: ' */' };
+  }
+  function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function snStrip(path, text) {
+    if (!text) return '';
+    var mk = snMarker(path), re = new RegExp(reEsc(mk.o) + '[\\s\\S]*?' + reEsc(mk.e), 'g');
+    return text.replace(re, '').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+  }
+  function snWrap(path, snip) {
+    var mk = snMarker(path);
+    return '\n\n' + mk.o + snip.id + mk.m + '\n' + String(snip.code || '').replace(/\s+$/, '') + '\n' + mk.c + snip.id + mk.e + '\n';
+  }
+  function snCompile(path, baseTxt, list) {
+    var out = (baseTxt || '').replace(/\s+$/, '');
+    (list || []).forEach(function (s) { out += snWrap(path, s); });
+    return out;
+  }
+  function snId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function snList(row) { return row.draft != null ? (row.draft_snippets || []) : (row.snippets || []); }
+
+  var CODE = S.code = {
+    cache: null, // { path: {published, draft, updated_at, history:[{code,at}], snippets:[{id,code,at}], draft_snippets} }
+
+    supported: function () { return !!(base && key); },
+
+    list: function () {
+      return C.token().then(function (tok) {
+        return fetch(base + '/rest/v1/lsl_code?select=path,published,draft,updated_at,history,snippets,draft_snippets&t=' + Date.now(), {
+          headers: { apikey: key, Authorization: 'Bearer ' + tok, 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store'
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            var m = {}; (rows || []).forEach(function (row) { m[row.path] = row; });
+            CODE.cache = m; return m;
+          });
+      });
+    },
+
+    get: function (path) { return (CODE.cache && CODE.cache[path]) || null; },
+
+    /* Borrador: SOLO vista previa en este dispositivo (no toca lo que ven los demás).
+       snippetList es opcional: si se pasa, también guarda la lista de fragmentos
+       (draft_snippets) junto con el texto ya compilado, en el mismo pedido. */
+    saveDraft: function (path, code, snippetList) {
+      return C.token().then(function (tok) {
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' };
+        var body = { path: path, draft: code, updated_at: new Date().toISOString() };
+        if (snippetList !== undefined) body.draft_snippets = snippetList;
+        return fetch(base + '/rest/v1/lsl_code?on_conflict=path', {
+          method: 'POST', headers: h, cache: 'no-store',
+          body: JSON.stringify(body)
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            CODE.cache = CODE.cache || {};
+            CODE.cache[path] = Object.assign({}, CODE.cache[path], rows && rows[0]);
+            return true;
+          });
+      });
+    },
+
+    /* Publica: el borrador pasa a ser lo que ve todo el mundo. Guarda la versión
+       publicada anterior en el historial (hasta 8), para poder restaurar. */
+    publish: function (path) {
+      var row = CODE.get(path);
+      var prevPublished = row && row.published;
+      var draft = row && (row.draft != null ? row.draft : row.published);
+      if (draft == null) return Promise.reject(new Error('No hay nada para publicar en ' + path + '.'));
+      var newSnippets = row && (row.draft_snippets != null ? row.draft_snippets : row.snippets) || [];
+      return C.token().then(function (tok) {
+        var hist = (row && row.history) || [];
+        if (prevPublished != null) { hist = [{ code: prevPublished, at: new Date().toISOString() }].concat(hist).slice(0, 8); }
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' };
+        return fetch(base + '/rest/v1/lsl_code?on_conflict=path', {
+          method: 'POST', headers: h, cache: 'no-store',
+          body: JSON.stringify({ path: path, published: draft, draft: null, snippets: newSnippets, draft_snippets: null, history: hist, updated_at: new Date().toISOString() })
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            CODE.cache = CODE.cache || {};
+            CODE.cache[path] = Object.assign({}, CODE.cache[path], rows && rows[0]);
+            return true;
+          });
+      });
+    },
+
+    /* Restaura una versión del historial (índice 0 = la más reciente anterior) como NUEVO publicado */
+    restore: function (path, historyIndex) {
+      var row = CODE.get(path); if (!row || !row.history || !row.history[historyIndex]) return Promise.reject(new Error('No hay esa versión guardada.'));
+      var target = row.history[historyIndex];
+      return C.token().then(function (tok) {
+        var hist = row.history.slice(); hist.splice(historyIndex, 1);
+        if (row.published != null) hist = [{ code: row.published, at: new Date().toISOString() }].concat(hist).slice(0, 8);
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' };
+        return fetch(base + '/rest/v1/lsl_code?on_conflict=path', {
+          method: 'POST', headers: h, cache: 'no-store',
+          body: JSON.stringify({ path: path, published: target.code, draft: null, snippets: [], draft_snippets: null, history: hist, updated_at: new Date().toISOString() })
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            CODE.cache = CODE.cache || {};
+            CODE.cache[path] = Object.assign({}, CODE.cache[path], rows && rows[0]);
+            return true;
+          });
+      });
+    },
+
+    /* Descarta el borrador (no toca lo publicado) */
+    discardDraft: function (path) {
+      return C.token().then(function (tok) {
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' };
+        return fetch(base + '/rest/v1/lsl_code?on_conflict=path', {
+          method: 'POST', headers: h, cache: 'no-store',
+          body: JSON.stringify({ path: path, draft: null, draft_snippets: null, updated_at: new Date().toISOString() })
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            CODE.cache = CODE.cache || {};
+            CODE.cache[path] = Object.assign({}, CODE.cache[path], rows && rows[0]);
+            return true;
+          });
+      });
+    },
+
+    /* Vista previa: SOLO este dispositivo/sesión ve el borrador en vez de lo publicado.
+       Se activa/desactiva con un flag en localStorage que lee el bootloader de index.html. */
+    previewOn: function () { return LS.get(K_CODEPREV) === true; },
+    setPreview: function (on) { on ? LS.set(K_CODEPREV, true) : LS.del(K_CODEPREV); }
+  };
+
 })(window);

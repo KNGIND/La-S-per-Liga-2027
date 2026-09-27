@@ -40,6 +40,11 @@
       ':root[data-theme=light]{--act:' + U.mix(ac, '#000000', 0.42) + ';--pts:' + U.mix(ac2, '#000000', 0.55) + '}';
     styleEl.textContent = css;
     applyTheme(); applyPerf();
+    // Si hay un override de CSS del editor de código, tiene que seguir ganando la
+    // cascada: lo volvemos a mover al final del <head> cada vez que este bloque
+    // de colores del panel Diseño se reescribe (si no, Diseño lo pisaría).
+    var ov = doc.getElementById('lsl-code-override-css');
+    if (ov) doc.head.appendChild(ov);
   }
   function applyTheme() {
     var m = (P.mode && P.mode !== 'auto') ? P.mode : (S.state.design.mode === 'light' ? 'light' : 'dark');
@@ -307,6 +312,7 @@
     s.onload = function () {
       LSL.admin.open();
       if (!LSL.editTouch) { var es = doc.createElement('script'); es.src = 'js/edit.js'; doc.head.appendChild(es); }
+      if (!LSL.codeEditor) { var cs = doc.createElement('script'); cs.src = 'js/codeeditor.js'; doc.head.appendChild(cs); }
     };
     s.onerror = function () { UI.toast('No se pudo cargar el panel. Revisá tu conexión.'); };
     doc.head.appendChild(s);
@@ -585,6 +591,9 @@
     doc.addEventListener('click', onClick);
     initPillDrag(); initStack(); initDrawerSwipe();
     S.on('change', function () { requestAnimationFrame(onData); });
+    // Llegamos hasta acá sin explotar: si veníamos probando un código publicado
+    // por el editor de código, confirmamos que arrancó bien (ver watchdog en index.html).
+    try { sessionStorage.removeItem('lsl:code_boot_pending'); } catch (e) { }
     if (h === 'admin') LSL.openAdmin();
     w.addEventListener('hashchange', function () {
       var x = routeOf(location.hash);

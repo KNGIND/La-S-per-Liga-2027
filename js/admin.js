@@ -16,7 +16,8 @@
     ['design', 'Diseño', 'sliders', 'Colores, navegación, estilo', 'c6'],
     ['ann', 'Avisos', 'bell', 'Notificaciones y actualizaciones', 'c7'],
     ['cloud', 'Nube', 'db', 'Conexión con Supabase', 'c8'],
-    ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9']
+    ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9'],
+    ['code', 'Código', 'edit', 'Editar los archivos de la app', 'c10']
   ];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
@@ -189,9 +190,31 @@
       if (t) t.textContent = meta ? meta[1] : 'Administración';
       var backBtn = $('.adm-h .ib');
       if (backBtn) { backBtn.setAttribute('data-a', 'menu'); backBtn.setAttribute('aria-label', 'Volver'); backBtn.innerHTML = ic('chev-l'); }
+      if (section === 'code') { renderCode(t); return; }
       b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[section]();
     }
     b.scrollTop = st;
+  }
+  /* ---------- Código (puente hacia js/codeeditor.js, con enrutamiento propio de 3 niveles) ---------- */
+  function renderCode(titleEl) {
+    var b = $('#adm-b');
+    if (!LSL.codeEditor) { b.innerHTML = '<p class="mut">Cargando el editor de código…</p>'; setTimeout(function () { if (LSL.codeEditor) render(); }, 300); return; }
+    var CE = LSL.codeEditor, st = CE.state;
+    var backBtn = $('.adm-h .ib');
+    if (!S.code.supported()) { b.innerHTML = warn('El editor de código necesita el modo nube (Supabase) activado. Configurá la conexión en Nube y volvé acá.'); return; }
+    if (!st.path && !st.cat) {
+      b.innerHTML = CE.catList();
+    } else if (st.cat && !st.path) {
+      if (titleEl) titleEl.textContent = st.cat;
+      if (backBtn) backBtn.setAttribute('data-a', 'ce-back-cats');
+      b.innerHTML = CE.fileList(st.cat);
+    } else {
+      var f = CE.fileDef(st.path);
+      if (titleEl) titleEl.textContent = f ? f.name : 'Código';
+      if (backBtn) backBtn.setAttribute('data-a', 'ce-back-files');
+      b.innerHTML = st.loading ? '<p class="mut">Cargando…</p>' : CE.fileDetail(st.path);
+      if (!st.loading) CE.afterRender();
+    }
   }
   function bar(label, act) { return '<div class="adm-bar"><button class="btn" data-a="' + act + '">' + ic('plus') + label + '</button></div>'; }
   function none(t, s) { return '<div class="empty"><b>' + esc(t) + '</b><span>' + esc(s || '') + '</span></div>'; }
@@ -659,6 +682,9 @@
       case 'edit-mode': return enterEditMode();
       case 'section': section = v; tab = v; render(); LSL.pushLayer(backToMenu); return;
       case 'menu': return close();
+      case 'ce-cat': case 'ce-file': case 'ce-back-cats': case 'ce-back-files': case 'ce-discard': case 'ce-preview': case 'ce-publish': case 'ce-restore':
+      case 'ce-sn-add': case 'ce-sn-cancel': case 'ce-sn-save': case 'ce-sn-remove':
+        return LSL.codeEditor && LSL.codeEditor.onAction(a, v, render);
       case 'tab': tab = v; return render();
       case 'mf': mf = v; return render();
       case 'new-match': return matchForm();
