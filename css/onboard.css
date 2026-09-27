@@ -14,7 +14,8 @@
 .ob-dots i { width: 28px; height: 5px; border-radius: 3px; background: var(--line); }
 .ob-dots i.on { background: var(--ac); }
 .ob-ttl { flex: 1; text-align: center; font: 800 20px/1 var(--fd); letter-spacing: .04em; text-transform: uppercase; }
-.ob-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 22px 0; overflow-y: auto; overscroll-behavior: contain; }
+.ob-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 22px 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.ob-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .ob-c { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 3vh; }
 .ob-k { color: var(--act); font-size: 12.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .ob-h { margin-top: 10px; font: 900 44px/.98 var(--fd); letter-spacing: .01em; }
