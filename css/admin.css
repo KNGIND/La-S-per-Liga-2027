@@ -219,3 +219,82 @@ input[type=range] { width: 100%; accent-color: var(--ac); height: 32px; }
 .edt-hint.on { opacity: 1; }
 [data-edit] { position: relative; }
 .adm-edit-on [data-edit]::after { content: ''; position: absolute; inset: -3px; border-radius: 10px; border: 1.5px dashed color-mix(in srgb, var(--ac) 55%, transparent); pointer-events: none; }
+
+/* Formulario para agregar código */
+.ce-add-code-form {
+  padding: 16px;
+}
+
+.ce-add-code-form h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ce-add-code-form label {
+  display: block;
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ce-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-left: 4px;
+}
+
+.ce-radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.ce-radio-group input[type="radio"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.ce-add-code-textarea {
+  width: 100%;
+  height: 200px;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: inherit;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.ce-add-code-textarea::placeholder {
+  opacity: 0.5;
+}
+
+.ce-add-code-tip {
+  background: var(--ac-soft);
+  border-left: 3px solid var(--ac);
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 16px;
+  color: inherit;
+  line-height: 1.4;
+}
+
+.ce-add-code-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
