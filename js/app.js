@@ -11,6 +11,57 @@
   var launch = root.getAttribute('data-launch') || 'fresh';
   function lite() { return root.getAttribute('data-perf') === 'lite'; }
 
+  /* ---------- Android back button handler ---------- */
+  function initBackButton() {
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('backbutton', handleBackButton, false);
+    }
+  }
+  function handleBackButton() {
+    console.log('[BackButton] Pressed. Current section:', cur);
+    
+    // 1. Si hay modal de partido abierto
+    var drModal = doc.querySelector('.dr-modal.active');
+    if (drModal) {
+      var closeBtn = drModal.querySelector('[data-a="dr-close"], .dr-close, [aria-label*="Cerrar"]');
+      if (closeBtn) { closeBtn.click(); return; }
+    }
+    
+    // 2. Si hay modal de noticias abierto
+    var neModal = doc.querySelector('.ne-modal.active');
+    if (neModal) {
+      var closeBtn = neModal.querySelector('[data-a="ne-close"], .ne-close, [aria-label*="Cerrar"]');
+      if (closeBtn) { closeBtn.click(); return; }
+    }
+    
+    // 3. Si el menú lateral está abierto
+    var sidebar = doc.querySelector('.sb, [class*="sidebar"], .menu, [data-menu]');
+    if (sidebar && (sidebar.classList.contains('open') || sidebar.classList.contains('active'))) {
+      sidebar.classList.remove('open');
+      sidebar.classList.remove('active');
+      if (window.LSL && window.LSL.ui) window.LSL.ui.closeMenu();
+      return;
+    }
+    
+    // 4. Si estamos en una sección que no sea Inicio
+    if (cur && cur !== 'home') {
+      console.log('[BackButton] Volviendo a home desde', cur);
+      if (window.LSL && window.LSL.ui && window.LSL.ui.show) {
+        window.LSL.ui.show('home');
+      }
+      return;
+    }
+    
+    // 5. Si estamos en Inicio, cierra la app
+    console.log('[BackButton] Cerrando app');
+    if (navigator.app && typeof navigator.app.exitApp === 'function') {
+      navigator.app.exitApp(); // Cordova
+    } else if (typeof window.plugins !== 'undefined' && window.plugins.exit && typeof window.plugins.exit.exit === 'function') {
+      window.plugins.exit.exit(); // Capacitor
+    }
+  }
+  initBackButton();
+
   /* ---------- fondos de la página (los elige el admin) ---------- */
   var BGS = {
     navy: { bg: '#04101F', bg2: '#071A2E', card: '#0B1E33', card2: '#10283F', line: '#173653' },
