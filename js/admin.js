@@ -17,7 +17,8 @@
     ['ann', 'Avisos', 'bell', 'Notificaciones y actualizaciones', 'c7'],
     ['cloud', 'Nube', 'db', 'Conexión con Supabase', 'c8'],
     ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9'],
-    ['code', 'Código', 'edit', 'Editar los archivos de la app', 'c10']
+    ['code', 'Código', 'edit', 'Editar los archivos de la app', 'c10'],
+    ['snippets', 'Snippets', 'layers', 'Fragmentos de código reutilizables', 'c11']
   ];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
@@ -191,6 +192,11 @@
       var backBtn = $('.adm-h .ib');
       if (backBtn) { backBtn.setAttribute('data-a', 'menu'); backBtn.setAttribute('aria-label', 'Volver'); backBtn.innerHTML = ic('chev-l'); }
       if (section === 'code') { renderCode(t); return; }
+      if (section === 'snippets') {
+        if (!LSL.snippets) { b.innerHTML = '<p class="mut">Cargando snippets…</p>'; return; }
+        LSL.snippets.init();
+        return;
+      }
       b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[section]();
     }
     b.scrollTop = st;
@@ -676,6 +682,9 @@
   root.addEventListener('click', function (e) {
     var el = e.target.closest('[data-a]'); if (!el) return;
     var a = el.getAttribute('data-a'), id = el.getAttribute('data-id'), v = el.getAttribute('data-v');
+    if (a && a.indexOf('snp-') === 0) {
+      return LSL.snippets && LSL.snippets.onAction.call(null, e);
+    }
     switch (a) {
       case 'close': return close();
       case 'login': return doLogin();
