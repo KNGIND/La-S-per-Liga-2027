@@ -647,4 +647,58 @@
     setPreview: function (on) { on ? LS.set(K_CODEPREV, true) : LS.del(K_CODEPREV); }
   };
 
+  /* ---------- SNIPPETS: fragmentos de código reutilizables ---------- */
+  var SNIPPETS = S.snippets = {
+    cache: null,
+    list: function () {
+      return C.token().then(function (tok) {
+        return fetch(base + '/rest/v1/lsl_snippets?select=*&order=created_at.desc', {
+          headers: { apikey: key, Authorization: 'Bearer ' + tok, 'Cache-Control': 'no-cache' }, cache: 'no-store'
+        }).then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) { SNIPPETS.cache = rows || []; return SNIPPETS.cache; });
+      });
+    },
+    /* f = { name, code, file_target, location, custom_line, category, description } */
+    create: function (f) {
+      return C.token().then(function (tok) {
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+        var body = { name: f.name, code: f.code, file_target: f.file_target, location: f.location || 'end', custom_line: f.custom_line || null, category: f.category || null, description: f.description || null, history: [] };
+        return fetch(base + '/rest/v1/lsl_snippets', { method: 'POST', headers: h, cache: 'no-store', body: JSON.stringify(body) })
+          .then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            if (rows && rows[0]) { SNIPPETS.cache = SNIPPETS.cache || []; SNIPPETS.cache.unshift(rows[0]); }
+            return rows && rows[0];
+          });
+      });
+    },
+    /* Edita y, si el código cambió, guarda la versión anterior en el historial (máx. 10) en el MISMO pedido */
+    update: function (id, f) {
+      var old = SNIPPETS.get(id);
+      return C.token().then(function (tok) {
+        var h = { apikey: key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+        var body = { name: f.name, code: f.code, file_target: f.file_target, location: f.location, custom_line: f.custom_line || null, category: f.category || null, description: f.description || null, updated_at: new Date().toISOString() };
+        if (old && old.code !== f.code) body.history = [{ code: old.code, updated_at: new Date().toISOString() }].concat(old.history || []).slice(0, 10);
+        return fetch(base + '/rest/v1/lsl_snippets?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: h, cache: 'no-store', body: JSON.stringify(body) })
+          .then(function (r) { return r.ok ? r.json() : httpErr(r); })
+          .then(function (rows) {
+            if (rows && rows[0] && SNIPPETS.cache) {
+              var i = SNIPPETS.cache.findIndex(function (s) { return s.id === id; });
+              if (i >= 0) SNIPPETS.cache[i] = rows[0];
+            }
+            return rows && rows[0];
+          });
+      });
+    },
+    delete: function (id) {
+      return C.token().then(function (tok) {
+        return fetch(base + '/rest/v1/lsl_snippets?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: { apikey: key, Authorization: 'Bearer ' + tok }, cache: 'no-store' })
+          .then(function (r) { return r.ok ? true : httpErr(r); })
+          .then(function () { if (SNIPPETS.cache) SNIPPETS.cache = SNIPPETS.cache.filter(function (s) { return s.id !== id; }); return true; });
+      });
+    },
+    get: function (id) {
+      return (SNIPPETS.cache || []).find(function (s) { return s.id === id; }) || null;
+    }
+  };
+
 })(window);

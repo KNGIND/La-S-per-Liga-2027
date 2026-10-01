@@ -18,7 +18,7 @@
     ['cloud', 'Nube', 'db', 'Conexión con Supabase', 'c8'],
     ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9'],
     ['code', 'Código', 'edit', 'Editar los archivos de la app', 'c10'],
-    ['snippets', 'Snippets', 'layers', 'Fragmentos de código reutilizables', 'c11']
+    ['snippets', 'Snippets', 'book', 'Fragmentos de código reutilizables', 'c11']
   ];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
@@ -174,6 +174,15 @@
         return '<button class="am-card ' + t[4] + '" data-a="section" data-v="' + t[0] + '"><span class="am-ic">' + ic(t[2]) + '</span><span class="am-tx"><b>' + esc(t[1]) + '</b><small>' + esc(t[3]) + '</small></span><span class="am-go">' + ic('chev-r') + '</span></button>';
       }).join('') + '</div>';
   }
+  function loadSnippets() {
+    var b = $('#adm-b'); if (!b) return;
+    if (LSL.snippets) { LSL.snippets.init(); return; }
+    b.innerHTML = '<p class="mut sm pad">Cargando snippets…</p>';
+    var s = doc.createElement('script'); s.src = 'js/snippets.js';
+    s.onload = function () { if (LSL.snippets) LSL.snippets.init(); };
+    s.onerror = function () { b.innerHTML = none('No se pudo cargar', 'Revisá que js/snippets.js esté subido y tu conexión.'); };
+    doc.head.appendChild(s);
+  }
   function render() {
     var b = $('#adm-b'); if (!b) return;
     var key = section || '__menu__';
@@ -192,11 +201,7 @@
       var backBtn = $('.adm-h .ib');
       if (backBtn) { backBtn.setAttribute('data-a', 'menu'); backBtn.setAttribute('aria-label', 'Volver'); backBtn.innerHTML = ic('chev-l'); }
       if (section === 'code') { renderCode(t); return; }
-      if (section === 'snippets') {
-        if (!LSL.snippets) { b.innerHTML = '<p class="mut">Cargando snippets…</p>'; return; }
-        LSL.snippets.init();
-        return;
-      }
+      if (section === 'snippets') { loadSnippets(); return; }
       b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[section]();
     }
     b.scrollTop = st;
@@ -683,7 +688,7 @@
     var el = e.target.closest('[data-a]'); if (!el) return;
     var a = el.getAttribute('data-a'), id = el.getAttribute('data-id'), v = el.getAttribute('data-v');
     if (a && a.indexOf('snp-') === 0) {
-      return LSL.snippets && LSL.snippets.onAction.call(null, e);
+      return LSL.snippets && LSL.snippets.onAction(a, v);
     }
     switch (a) {
       case 'close': return close();
