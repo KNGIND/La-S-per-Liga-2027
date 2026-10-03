@@ -11,56 +11,37 @@
   var launch = root.getAttribute('data-launch') || 'fresh';
   function lite() { return root.getAttribute('data-perf') === 'lite'; }
 
-  /* ---------- Android back button handler ---------- */
-  function initBackButton() {
-    if (typeof document !== 'undefined' && document.addEventListener) {
-      document.addEventListener('backbutton', handleBackButton, false);
-    }
-  }
-  function handleBackButton() {
-    console.log('[BackButton] Pressed. Current section:', cur);
-    
-    // 1. Si hay modal de partido abierto
-    var drModal = doc.querySelector('.dr-modal.active');
-    if (drModal) {
-      var closeBtn = drModal.querySelector('[data-a="dr-close"], .dr-close, [aria-label*="Cerrar"]');
-      if (closeBtn) { closeBtn.click(); return; }
-    }
-    
-    // 2. Si hay modal de noticias abierto
-    var neModal = doc.querySelector('.ne-modal.active');
-    if (neModal) {
-      var closeBtn = neModal.querySelector('[data-a="ne-close"], .ne-close, [aria-label*="Cerrar"]');
-      if (closeBtn) { closeBtn.click(); return; }
-    }
-    
-    // 3. Si el menú lateral está abierto
-    var sidebar = doc.querySelector('.sb, [class*="sidebar"], .menu, [data-menu]');
-    if (sidebar && (sidebar.classList.contains('open') || sidebar.classList.contains('active'))) {
-      sidebar.classList.remove('open');
-      sidebar.classList.remove('active');
-      if (window.LSL && window.LSL.ui) window.LSL.ui.closeMenu();
-      return;
-    }
-    
-    // 4. Si estamos en una sección que no sea Inicio
-    if (cur && cur !== 'home') {
-      console.log('[BackButton] Volviendo a home desde', cur);
-      if (window.LSL && window.LSL.ui && window.LSL.ui.show) {
-        window.LSL.ui.show('home');
+  /* ---------- diseño visual: bloques editables y su CSS (el editor está en layout.js) ---------- */
+  LSL.layoutReg = [
+    { key: 'hero', sel: '.hero', label: 'Partido destacado' }, { key: 'mc', sel: '.mc', label: 'Tarjetas de partidos' },
+    { key: 'ns', sel: '.ns', label: 'Carrusel de noticias' }, { key: 'nw', sel: '.nw', label: 'Noticias (lista)' },
+    { key: 'tw', sel: '.tw', label: 'Tabla de posiciones' }, { key: 'card', sel: '.card', label: 'Tarjetas' },
+    { key: 'blk', sel: '.blk', label: 'Sección' }, { key: 'banner', sel: '#banner', label: 'Banner' },
+    { key: 'ann', sel: '#ann', label: 'Avisos' }, { key: 'top', sel: '#top', label: 'Encabezado', fixed: true }
+  ];
+  var layStyle = null;
+  function layoutCss(L) {
+    var o = '';
+    if (!L || typeof L !== 'object') return o;
+    LSL.layoutReg.forEach(function (r) {
+      var c = L[r.key]; if (!c || typeof c !== 'object') return;
+      var s = r.sel, bg = U.hexOr(c.bg, ''), fg = U.hexOr(c.color, ''), sc = +c.scale, h = +c.h, wd = +c.w, d = '';
+      if (bg) d += 'background:' + bg + '!important;';
+      if (!r.fixed) {
+        if (c.hide) d += 'display:none!important;';
+        if (sc >= .6 && sc <= 1.6 && sc !== 1) d += 'zoom:' + sc + ';';
+        if (h >= 24 && h <= 600) d += 'min-height:' + Math.round(h) + 'px;';
+        if (wd >= 50 && wd < 100) d += 'width:' + Math.round(wd) + '%!important;margin-left:auto;margin-right:auto;';
       }
-      return;
-    }
-    
-    // 5. Si estamos en Inicio, cierra la app
-    console.log('[BackButton] Cerrando app');
-    if (navigator.app && typeof navigator.app.exitApp === 'function') {
-      navigator.app.exitApp(); // Cordova
-    } else if (typeof window.plugins !== 'undefined' && window.plugins.exit && typeof window.plugins.exit.exit === 'function') {
-      window.plugins.exit.exit(); // Capacitor
-    }
+      if (d) o += s + '{' + d + '}';
+      if (fg) o += s + ',' + s + ' *{color:' + fg + '!important}';
+    });
+    return o;
   }
-  initBackButton();
+  LSL.setLayout = function (L) {
+    if (!layStyle) { layStyle = doc.createElement('style'); layStyle.id = 'lsl-layout'; doc.head.appendChild(layStyle); }
+    layStyle.textContent = layoutCss(L);
+  };
 
   /* ---------- fondos de la página (los elige el admin) ---------- */
   var BGS = {
@@ -90,6 +71,7 @@
       ':root[data-theme=dark]{--bg:' + b.bg + ';--bg2:' + b.bg2 + ';--card:' + b.card + ';--card2:' + b.card2 + ';--line:' + b.line + ';--act:' + ac + ';--pts:' + ac2 + '}' +
       ':root[data-theme=light]{--act:' + U.mix(ac, '#000000', 0.42) + ';--pts:' + U.mix(ac2, '#000000', 0.55) + '}';
     styleEl.textContent = css;
+    LSL.setLayout(d.layout);
     applyTheme(); applyPerf();
     // Si hay un override de CSS del editor de código, tiene que seguir ganando la
     // cascada: lo volvemos a mover al final del <head> cada vez que este bloque
@@ -237,9 +219,10 @@
     view.innerHTML = html;
     if (anim) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); }
   }
-  function go(tab, keepScroll) {
+  function go(tab, keepScroll, fromBack) {
     if (tab === 'more') tab = 'profile';
     if (tab === 'news' && !S.state.features.news) tab = 'home';
+    if (tab !== cur && !fromBack) { tabStack.push(cur); if (tabStack.length > 12) tabStack.shift(); }
     if (tab !== cur) { scrolls[cur] = w.pageYOffset; cur = tab; setActive(); render(true); w.scrollTo(0, scrolls[tab] || 0); }
     else if (!keepScroll) { render(false); w.scrollTo({ top: 0 }); }
     try { history.replaceState(history.state, '', '#/' + tab); } catch (e) { }
@@ -275,7 +258,7 @@
             3) en el inicio avisa "Presioná de nuevo para salir"; con un segundo atrás sale.
      IMPORTANTE: Chrome salta (ignora al volver) las entradas de historial creadas por una página que todavía no recibió
      ningún toque. Por eso la entrada "colchón" y las capas se agregan recién después del primer toque del usuario. */
-  var layers = [], armed = false, armT = 0, active = false, pending = [];
+  var layers = [], armed = false, armT = 0, active = false, pending = [], tabStack = [];
   function rawPush(kind) { try { history.pushState({ lsl: kind }, ''); } catch (e) { } }
   function place(kind) { if (active) rawPush(kind); else pending.push(kind); }
   function pushBuf() { place('buf'); }
@@ -363,7 +346,6 @@
     s.onload = function () {
       LSL.admin.open();
       if (!LSL.editTouch) { var es = doc.createElement('script'); es.src = 'js/edit.js'; doc.head.appendChild(es); }
-      if (!LSL.codeEditor) { var cs = doc.createElement('script'); cs.src = 'js/codeeditor.js'; doc.head.appendChild(cs); }
     };
     s.onerror = function () { UI.toast('No se pudo cargar el panel. Revisá tu conexión.'); };
     doc.head.appendChild(s);
@@ -660,6 +642,7 @@
       w.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { }); });
     }
     w.addEventListener('load', function () { setTimeout(probe, 600); });
+    if (CFG.supabaseUrl && CFG.supabaseAnonKey) w.addEventListener('load', function () { setTimeout(function () { if (LSL.game) return; var gs = doc.createElement('script'); gs.src = 'js/game.js'; doc.head.appendChild(gs); }, 1500); });
     runSplash();
   }
   boot();

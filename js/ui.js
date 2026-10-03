@@ -345,6 +345,7 @@
     var st = S.state, L = st.league, f = st.features, segs = [['table', 'Posiciones']], cups = cupList();
     if (cups.length) segs.push(['cups', 'Copas']);
     if (f.sanctions) segs.push(['sanc', 'Sanciones']);
+    if (LSL.game && LSL.game.can('leaderboard_visible')) segs.push(['rank', 'Ranking']);
     segs.push(['rules', 'Reglamento']);
     if (!segs.some(function (s) { return s[0] === VS.lseg; })) VS.lseg = 'table';
     var h = '<h1 class="h">Liga</h1><p class="sub">' + esc(L.season) + ' · ' + esc(L.seasonStatus) + '</p>' + segChips(segs, VS.lseg, 'lseg');
@@ -358,6 +359,8 @@
       h += '<div class="tb-foot">' + (lg ? '<div class="tb-lg">' + lg + '</div>' : '<span></span>') +
         '<button class="lnk" data-act="full">' + (VS.full ? 'Ver resumida' : 'Ver completa') + '</button></div>';
       h += '<p class="note">Victoria ' + (+L.pointsWin) + ' pts · Empate ' + (+L.pointsDraw) + ' · Derrota ' + (+L.pointsLoss) + '</p>';
+    } else if (VS.lseg === 'rank') {
+      h += LSL.game ? LSL.game.rankHTML() : '';
     } else if (VS.lseg === 'cups') {
       h += cupsView(cups);
     } else if (VS.lseg === 'sanc') {
@@ -458,7 +461,7 @@
       (live ? '<span class="live"><i></i>' + esc(st) + '</span>' : (st ? '<span class="chip">' + st + '</span>' : '')) + '</div>' +
       '<div class="hero-row"><div class="tm">' + crest(h, 'x') + '<span class="hn" id="sheet-t">' + esc(h ? h.name : 'Equipo') + '</span></div><div class="hero-mid">' + mid + '</div><div class="tm">' + crest(a, 'x') + '<span class="hn">' + esc(a ? a.name : 'Equipo') + '</span></div></div>' +
       '<p class="mh-sub">' + esc(T.long(ts)) + ' · ' + T.time(ts) + (m.leg2 && m.firstLeg ? ' · Ida: ' + esc(m.firstLeg) : '') + (m.pens ? ' · Penales: ' + esc(m.pens) : '') + '</p></div>';
-    out += '<div class="sb-in">' + seg(tabs, SH.tab, 'stab');
+    out += '<div class="sb-in">' + (LSL.game ? LSL.game.predHTML(m) : '') + seg(tabs, SH.tab, 'stab');
 
     if (SH.tab === 'sum') {
       var ev = (m.events || []).slice().sort(function (x, y) { return (parseInt(x.min, 10) || 0) - (parseInt(y.min, 10) || 0); });
@@ -539,6 +542,7 @@
     sheet = document.getElementById('sheet'); panel = sheet.querySelector('.panel'); body = document.getElementById('sbody');
     sheet.addEventListener('click', function (e) {
       if (e.target.closest('[data-close]')) return UI.closeSheet();
+      if (LSL.game && LSL.game.onSheetClick(e)) return;
       var t = e.target.closest('[data-seg="stab"]'); if (t) { SH.tab = t.getAttribute('data-v'); UI.renderSheet(); if (UI.onSheet) UI.onSheet(); return; }
       var sd = e.target.closest('[data-side]'); if (sd) { SH.side = sd.getAttribute('data-side'); return UI.renderSheet(); }
     });

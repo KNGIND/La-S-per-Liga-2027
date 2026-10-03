@@ -17,8 +17,7 @@
     ['ann', 'Avisos', 'bell', 'Notificaciones y actualizaciones', 'c7'],
     ['cloud', 'Nube', 'db', 'Conexión con Supabase', 'c8'],
     ['data', 'Datos', 'db', 'Exportar, importar, contraseña', 'c9'],
-    ['code', 'Código', 'edit', 'Editar los archivos de la app', 'c10'],
-    ['snippets', 'Snippets', 'book', 'Fragmentos de código reutilizables', 'c11']
+    ['game', 'Juego', 'trophy', 'Ranking, pronósticos y rachas', 'c10']
   ];
   var COMP = [['liga', 'Liga'], ['copa', 'Copa'], ['amistoso', 'Amistoso']];
   var STAT = [['upcoming', 'Próximo'], ['live', 'En vivo'], ['paused', 'Descanso'], ['finished', 'Finalizado']];
@@ -120,9 +119,16 @@
     var admEl = $('#adm'); if (admEl) admEl.style.display = 'none';
     html.classList.remove('lock'); html.classList.add('adm-edit-on');
     editBar = doc.createElement('div'); editBar.className = 'edt-bar';
-    editBar.innerHTML = '<span class="edt-bar-i">' + ic('cursor') + '</span><span class="edt-bar-t">Editando · mantené presionado algo marcado</span><button class="btn sm" id="edt-exit">Salir</button>';
+    editBar.innerHTML = '<span class="edt-bar-i">' + ic('cursor') + '</span><span class="edt-bar-t">Editando · mantené presionado algo marcado, o usá Diseño visual</span><button class="btn sm ghost" id="edt-lay">Diseño visual</button><button class="btn sm" id="edt-exit">Salir</button>';
     doc.body.appendChild(editBar);
     editBar.querySelector('#edt-exit').addEventListener('click', function () { exitEditMode(); });
+    editBar.querySelector('#edt-lay').addEventListener('click', function () {
+      if (LSL.layoutEditor) return LSL.layoutEditor.start();
+      var s = doc.createElement('script'); s.src = 'js/layout.js';
+      s.onload = function () { if (LSL.layoutEditor) LSL.layoutEditor.start(); };
+      s.onerror = function () { LSL.toast('No se pudo cargar el editor visual.'); };
+      doc.head.appendChild(s);
+    });
     LSL.pushLayer(function () { exitEditMode(true); });
   }
   function exitEditMode(fromPop) {
@@ -174,15 +180,6 @@
         return '<button class="am-card ' + t[4] + '" data-a="section" data-v="' + t[0] + '"><span class="am-ic">' + ic(t[2]) + '</span><span class="am-tx"><b>' + esc(t[1]) + '</b><small>' + esc(t[3]) + '</small></span><span class="am-go">' + ic('chev-r') + '</span></button>';
       }).join('') + '</div>';
   }
-  function loadSnippets() {
-    var b = $('#adm-b'); if (!b) return;
-    if (LSL.snippets) { LSL.snippets.init(); return; }
-    b.innerHTML = '<p class="mut sm pad">Cargando snippets…</p>';
-    var s = doc.createElement('script'); s.src = 'js/snippets.js';
-    s.onload = function () { if (LSL.snippets) LSL.snippets.init(); };
-    s.onerror = function () { b.innerHTML = none('No se pudo cargar', 'Revisá que js/snippets.js esté subido y tu conexión.'); };
-    doc.head.appendChild(s);
-  }
   function render() {
     var b = $('#adm-b'); if (!b) return;
     var key = section || '__menu__';
@@ -200,32 +197,59 @@
       if (t) t.textContent = meta ? meta[1] : 'Administración';
       var backBtn = $('.adm-h .ib');
       if (backBtn) { backBtn.setAttribute('data-a', 'menu'); backBtn.setAttribute('aria-label', 'Volver'); backBtn.innerHTML = ic('chev-l'); }
-      if (section === 'code') { renderCode(t); return; }
-      if (section === 'snippets') { loadSnippets(); return; }
+      if (section === 'game') { renderGame(); return; }
       b.innerHTML = ({ matches: tMatches, teams: tTeams, news: tNews, channels: tChannels, league: tLeague, design: tDesign, ann: tAnn, cloud: tCloud, data: tData })[section]();
     }
     b.scrollTop = st;
   }
-  /* ---------- Código (puente hacia js/codeeditor.js, con enrutamiento propio de 3 niveles) ---------- */
-  function renderCode(titleEl) {
-    var b = $('#adm-b');
-    if (!LSL.codeEditor) { b.innerHTML = '<p class="mut">Cargando el editor de código…</p>'; setTimeout(function () { if (LSL.codeEditor) render(); }, 300); return; }
-    var CE = LSL.codeEditor, st = CE.state;
-    var backBtn = $('.adm-h .ib');
-    if (!S.code.supported()) { b.innerHTML = warn('El editor de código necesita el modo nube (Supabase) activado. Configurá la conexión en Nube y volvé acá.'); return; }
-    if (!st.path && !st.cat) {
-      b.innerHTML = CE.catList();
-    } else if (st.cat && !st.path) {
-      if (titleEl) titleEl.textContent = st.cat;
-      if (backBtn) backBtn.setAttribute('data-a', 'ce-back-cats');
-      b.innerHTML = CE.fileList(st.cat);
-    } else {
-      var f = CE.fileDef(st.path);
-      if (titleEl) titleEl.textContent = f ? f.name : 'Código';
-      if (backBtn) backBtn.setAttribute('data-a', 'ce-back-files');
-      b.innerHTML = st.loading ? '<p class="mut">Cargando…</p>' : CE.fileDetail(st.path);
-      if (!st.loading) CE.afterRender();
-    }
+  /* ---------- JUEGO: ranking, pronósticos, rachas ---------- */
+  var GFIELDS = [
+    { k: 'leaderboard_visible', l: 'Mostrar el ranking en la sección Liga', t: 'check' },
+    { k: 'predictions_enabled', l: 'Pronósticos en el detalle del partido', t: 'check' },
+    { k: 'streaks_enabled', l: 'Rachas: puntos por entrar cada día', t: 'check' },
+    { k: 'hidden_enabled', l: 'Objetos ocultos (los ponés desde Avisos)', t: 'check' },
+    { k: 'pts_exact', l: 'Puntos: resultado exacto', t: 'number', w: 'h' }, { k: 'pts_outcome', l: 'Puntos: ganador o empate', t: 'number', w: 'h' },
+    { k: 'pts_daily', l: 'Puntos: entrar cada día', t: 'number', w: 'h' }, { k: 'pts_streak7', l: 'Bonus: cada 7 días seguidos', t: 'number', w: 'h' }
+  ];
+  var gm = { s: null, rows: [] };
+  function loadGame(cb) {
+    if (LSL.game) return cb();
+    var s = doc.createElement('script'); s.src = 'js/game.js'; s.onload = cb;
+    s.onerror = function () { var b = $('#adm-b'); if (b) b.innerHTML = warn('No se pudo cargar js/game.js. Revisá que esté subido.'); };
+    doc.head.appendChild(s);
+  }
+  function renderGame() {
+    var b = $('#adm-b'); if (!b) return;
+    b.innerHTML = '<p class="mut sm pad">Cargando…</p>';
+    loadGame(function () {
+      LSL.game.admin.load().then(function (s) {
+        if (!s) throw new Error('Falta correr supabase-ranking.sql en Supabase (SQL Editor).');
+        gm.s = s; return LSL.game.admin.board().catch(function () { return []; });
+      }).then(function (rows) { gm.rows = rows || []; if (section === 'game') paintGame(); })
+        .catch(function (e) { if (section === 'game') b.innerHTML = warn(e.message || 'No se pudo cargar'); });
+    });
+  }
+  function paintGame() {
+    var b = $('#adm-b'); if (!b || !gm.s) return;
+    var h = '<div class="af-sec flat" id="gm-form">' + fields(GFIELDS, gm.s) + '<button class="btn wide" data-a="game-save">Guardar</button></div>';
+    h += '<h3 class="adm-h3">Jugadores (' + gm.rows.length + ')</h3>';
+    h += gm.rows.length ? '<div class="stack">' + gm.rows.map(function (r) {
+      return '<div class="ar"><div class="ar-m"><div class="ar-t"><b>' + (+r.pos) + '. ' + esc(r.name) + '</b></div><div class="ar-s">' + (+r.points) + ' pts · ' + (+r.predictions) + ' pronósticos · ' + (+r.exact_hits) + ' exactos</div></div>' +
+        '<div class="ar-b"><button class="ib" data-a="game-give" data-id="' + esc(r.player_id) + '" aria-label="Dar o quitar puntos">' + ic('plus') + '</button></div></div>';
+    }).join('') + '</div>' : none('Sin jugadores todavía', 'Aparecen cuando alguien con perfil entra a la app con el juego activo.');
+    h += '<div class="af-sec"><button class="btn wide" data-a="game-settle">Recalcular puntos de partidos finalizados</button><p class="mut sm" style="margin-top:8px">Se calculan solos al publicar un resultado final. Usalo si corregiste un marcador.</p></div>';
+    b.innerHTML = h;
+  }
+  function gameSave() {
+    var o = read($('#gm-form'), GFIELDS, {});
+    ['pts_exact', 'pts_outcome', 'pts_daily', 'pts_streak7'].forEach(function (k) { o[k] = Math.max(0, Math.min(100, Math.round(+o[k] || 0))); });
+    LSL.game.admin.save(o).then(function () { toast('Guardado'); renderGame(); }).catch(function (e) { toast('Error: ' + (e.message || 'no se pudo guardar')); });
+  }
+  function gameSettle() { LSL.game.admin.settle().then(function () { toast('Puntos recalculados'); renderGame(); }).catch(function (e) { toast('Error: ' + (e.message || 'no se pudo')); }); }
+  function gameGive(pid) {
+    var n = parseInt(w.prompt('Puntos a sumar (negativo para restar):', '5'), 10); if (!n) return;
+    var note = w.prompt('Motivo (opcional):', '') || '';
+    LSL.game.admin.give(pid, n, note).then(function () { toast('Puntos actualizados'); renderGame(); }).catch(function (e) { toast('Error: ' + (e.message || 'no se pudo')); });
   }
   function bar(label, act) { return '<div class="adm-bar"><button class="btn" data-a="' + act + '">' + ic('plus') + label + '</button></div>'; }
   function none(t, s) { return '<div class="empty"><b>' + esc(t) + '</b><span>' + esc(s || '') + '</span></div>'; }
@@ -687,18 +711,15 @@
   root.addEventListener('click', function (e) {
     var el = e.target.closest('[data-a]'); if (!el) return;
     var a = el.getAttribute('data-a'), id = el.getAttribute('data-id'), v = el.getAttribute('data-v');
-    if (a && a.indexOf('snp-') === 0) {
-      return LSL.snippets && LSL.snippets.onAction(a, v);
-    }
     switch (a) {
       case 'close': return close();
       case 'login': return doLogin();
       case 'edit-mode': return enterEditMode();
       case 'section': section = v; tab = v; render(); LSL.pushLayer(backToMenu); return;
       case 'menu': return close();
-      case 'ce-cat': case 'ce-file': case 'ce-back-cats': case 'ce-back-files': case 'ce-discard': case 'ce-preview': case 'ce-publish': case 'ce-restore':
-      case 'ce-sn-add': case 'ce-sn-cancel': case 'ce-sn-save': case 'ce-sn-remove':
-        return LSL.codeEditor && LSL.codeEditor.onAction(a, v, render);
+      case 'game-save': return gameSave();
+      case 'game-settle': return gameSettle();
+      case 'game-give': return gameGive(id);
       case 'tab': tab = v; return render();
       case 'mf': mf = v; return render();
       case 'new-match': return matchForm();
