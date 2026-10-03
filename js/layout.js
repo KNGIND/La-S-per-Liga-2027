@@ -53,7 +53,7 @@
   function place() {
     if (!on || !sel || !ui) return;
     if (!el || !el.isConnected) { el = doc.querySelector(sel.sel); if (!el) { ui.hidden = true; tb.hidden = true; return; } }
-    ui.hidden = false;
+    ui.hidden = false; ui.classList.toggle('only-v', !!sel.fixed);
     var r = el.getBoundingClientRect(), W = w.innerWidth, H = w.innerHeight;
     ui.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
     var th = tb.offsetHeight || 150, y = r.top - th - 10;
@@ -70,7 +70,7 @@
     tb.innerHTML = '<div class="lay-t"><b>' + esc(sel.label) + '</b><span>' + (c.hide ? 'Oculto' : '') + '</span></div>' +
       '<div class="lay-r"><label>Fondo<input type="color" data-i="bg" value="' + bg + '"><input type="text" class="fld" data-i="bgx" maxlength="7" placeholder="#HEX" value="' + esc(hex(c.bg)) + '"></label>' +
       '<label>Texto<input type="color" data-i="color" value="' + fg + '"><input type="text" class="fld" data-i="colorx" maxlength="7" placeholder="#HEX" value="' + esc(hex(c.color)) + '"></label></div>' +
-      '<div class="lay-r">' + (sel.fixed ? '' : '<span class="lay-sc"><button data-l="sc-" aria-label="Achicar">−</button><b>' + Math.round((c.scale || 1) * 100) + '%</b><button data-l="sc+" aria-label="Agrandar">+</button></span>') +
+      '<div class="lay-r">' + (sel.key === 'top' ? '<span class="lay-sc"><button data-l="h-" aria-label="Achicar">−</button><b>Alto ' + (c.h || 52) + '</b><button data-l="h+" aria-label="Agrandar">+</button></span>' : sel.fixed ? '' : '<span class="lay-sc"><button data-l="sc-" aria-label="Achicar">−</button><b>' + Math.round((c.scale || 1) * 100) + '%</b><button data-l="sc+" aria-label="Agrandar">+</button></span>') +
       (sel.fixed ? '' : '<button class="lay-b" data-l="hide">' + (c.hide ? 'Mostrar' : 'Ocultar') + '</button>') +
       '<button class="lay-b" data-l="reset">Restablecer</button></div>';
     place();
@@ -98,6 +98,7 @@
     if (a === 'save') return save();
     if (!sel) return;
     var c = get(sel.key);
+    if (a === 'h+' || a === 'h-') { var cc = get(sel.key), nh = Math.max(40, Math.min(220, (cc.h || 52) + (a === 'h+' ? 4 : -4))); if (nh === 52) delete cc.h; else cc.h = nh; clean(); live(); paintTb(); return; }
     if (a === 'sc+' || a === 'sc-') { var s = Math.round(((c.scale || 1) + (a === 'sc+' ? .05 : -.05)) * 100) / 100; s = Math.max(.6, Math.min(1.6, s)); setProp('scale', s === 1 ? '' : s); paintTb(); }
     else if (a === 'hide') { setProp('hide', !c.hide); paintTb(); }
     else if (a === 'reset') { delete draft[sel.key]; live(); paintTb(); }
@@ -119,6 +120,9 @@
       var d = ((drag.left ? -dx : dx) + dy) / 2, s = Math.max(.6, Math.min(1.6, drag.s * (1 + d / Math.max(120, drag.w))));
       s = Math.round(s * 100) / 100; if (Math.abs(s - 1) < .02) s = 1;
       if (s === 1) delete c.scale; else c.scale = s;
+    } else if (drag.t === 'v' && sel.key === 'top') {
+      var sat = parseFloat(w.getComputedStyle(el).paddingTop) || 0, th2 = Math.max(40, Math.min(220, Math.round(drag.h - sat + dy)));
+      if (th2 === 52) delete c.h; else c.h = th2;
     } else if (drag.t === 'v' && !sel.fixed) {
       var hh = Math.max(0, Math.min(600, Math.round((drag.h + dy) / (c.scale || 1))));
       if (hh < 24) delete c.h; else c.h = hh;

@@ -27,6 +27,7 @@
       var c = L[r.key]; if (!c || typeof c !== 'object') return;
       var s = r.sel, bg = U.hexOr(c.bg, ''), fg = U.hexOr(c.color, ''), sc = +c.scale, h = +c.h, wd = +c.w, d = '';
       if (bg) d += 'background:' + bg + '!important;';
+      if (r.key === 'top' && h >= 40 && h <= 220) o += ':root{--top:' + Math.round(h) + 'px}';
       if (!r.fixed) {
         if (c.hide) d += 'display:none!important;';
         if (sc >= .6 && sc <= 1.6 && sc !== 1) d += 'zoom:' + sc + ';';
@@ -70,6 +71,12 @@
       ';--acg1:' + U.mix(ac, '#000000', 0.4) + ';--acg2:' + U.mix(U.hue(ac, 48), '#000000', 0.32) + ';--r:' + (+d.radius || 16) + 'px}' +
       ':root[data-theme=dark]{--bg:' + b.bg + ';--bg2:' + b.bg2 + ';--card:' + b.card + ';--card2:' + b.card2 + ';--line:' + b.line + ';--act:' + ac + ';--pts:' + ac2 + '}' +
       ':root[data-theme=light]{--act:' + U.mix(ac, '#000000', 0.42) + ';--pts:' + U.mix(ac2, '#000000', 0.55) + '}';
+    css += ':root[data-theme=gray],:root[data-theme=amoled]{--act:' + ac + ';--pts:' + ac2 + '}';
+    var pal = (d.pal || []).map(function (x) { return U.hexn(x); }).filter(Boolean).slice(0, 6);
+    if (pal.length >= 2) {
+      css += ':root{--grad:linear-gradient(90deg,' + pal.join(',') + ');--on-grad:' + U.ink(U.mix(pal[0], pal[pal.length - 1], 0.5)) + ';--p1:' + pal[0] + ';--pm:' + pal[pal.length >> 1] + ';--pl:' + pal[pal.length - 1] + '}';
+      root.setAttribute('data-pal', '1');
+    } else root.removeAttribute('data-pal');
     styleEl.textContent = css;
     LSL.setLayout(d.layout);
     applyTheme(); applyPerf();
@@ -80,10 +87,11 @@
     if (ov) doc.head.appendChild(ov);
   }
   function applyTheme() {
-    var m = (P.mode && P.mode !== 'auto') ? P.mode : (S.state.design.mode === 'light' ? 'light' : 'dark');
+    var TH = { dark: 1, light: 1, gray: 1, amoled: 1 }, dm = S.state.design.mode;
+    var m = (P.mode && TH[P.mode]) ? P.mode : (TH[dm] ? dm : 'dark');
     root.setAttribute('data-theme', m);
     var mt = $('meta[name=theme-color]');
-    if (mt) mt.setAttribute('content', m === 'light' ? '#EEF3F7' : palette(S.state.design).bg);
+    if (mt) mt.setAttribute('content', { light: '#EEF3F7', gray: '#202124', amoled: '#000000' }[m] || palette(S.state.design).bg);
   }
   function autoPerf() {
     if (LSL.probeLite) return 'lite';
@@ -304,7 +312,7 @@
     return '<div class="dr-scrim" data-dr-close></div><aside class="dr-p" role="dialog" aria-modal="true" aria-label="Menú">' +
       '<header class="dr-h"><button class="dr-me" data-drgo="profile">' + UI.avatar(p, 46) + '<span><b>' + esc(p ? p.name : 'Invitado') + '</b><small>' + esc(t ? t.name : 'Sin equipo') + '</small></span></button>' +
       '<button class="ib dr-x" data-dr-close aria-label="Cerrar menú">' + ic('close') + '</button></header>' +
-      '<div class="dr-b"><section class="dr-c"><h3>Apariencia</h3>' + UI.seg([['auto', 'Del sitio'], ['dark', 'Oscuro'], ['light', 'Claro']], mode, 'pmode') + '</section>' +
+      '<div class="dr-b"><section class="dr-c"><h3>Apariencia</h3>' + UI.seg([['auto', 'Del sitio'], ['dark', 'Oscuro'], ['light', 'Claro'], ['gray', 'Gris'], ['amoled', 'Negro']], mode, 'pmode') + '</section>' +
       '<section class="dr-c" id="dr-perf"><h3>Rendimiento</h3><p class="mut sm">Ligero apaga animaciones y efectos para celulares de gama baja. Alto activa desenfoque, animaciones y el apilado de noticias.</p>' +
       UI.seg([['auto', 'Automático'], ['full', 'Alto'], ['lite', 'Ligero']], perf, 'pperf') + '<p class="mut sm dr-now">Ahora: <b>' + (lite() ? 'Ligero' : 'Alto') + '</b></p></section>' +
       '<nav class="dr-l">' + items + '</nav></div><footer class="dr-f" data-edit="drawer.footer">' + esc(dl.footer || (L.name + ' · v2.0')) + '</footer></aside>';

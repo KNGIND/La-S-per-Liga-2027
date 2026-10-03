@@ -555,6 +555,14 @@
       return '<button class="nav-i' + (k === 2 ? ' c' : '') + (k === (i || 0) ? ' on' : '') + '" data-a="navp" data-v="' + k + '"><span class="ico">' + ic(t[0]) + '</span><span class="lb">' + t[1] + '</span></button>';
     }).join('') + '</div></div>';
   }
+  function palHtml(d) {
+    var p = (d.pal || []).slice(0, 6), g = p.length >= 2 ? 'linear-gradient(90deg,' + p.map(function (x) { return U.hexOr(x, '#888888'); }).join(',') + ')' : 'var(--card2)';
+    return '<section class="af-sec flat" id="palw"><h3>Combinación de colores</h3><p class="mut sm">Sumá 2 a 6 HEX y la página usa el degradado en botones, encabezado, carteles y brillo de fondo.</p>' +
+      '<div class="palbar" style="background:' + g + '"></div>' +
+      p.map(function (x, i) { var hv = U.hexOr(x, '#888888'); return '<div class="clrf"><input class="fld clrp" type="color" data-clr="p-' + i + '" value="' + hv + '"><input class="fld clrh" type="text" maxlength="7" placeholder="#RRGGBB" data-clrh="p-' + i + '" value="' + hv + '"><button class="lay-b" data-a="pal-del" data-v="' + i + '" aria-label="Quitar">✕</button></div>'; }).join('') +
+      '<div class="btns">' + (p.length < 6 ? '<button class="btn sm" data-a="pal-add">+ Agregar color</button>' : '') + '<button class="btn sm ghost" data-a="pal-preset">Ejemplo Marple</button>' + (p.length ? '<button class="btn sm ghost" data-a="pal-clear">Quitar degradado</button>' : '') + '</div></section>';
+  }
+  function palRefresh() { var n = $('#palw'); if (n) n.outerHTML = palHtml(S.state.design); }
   function seg(k, list, cur) { return '<div class="seg">' + list.map(function (o) { return '<button class="' + (o[0] === cur ? 'on' : '') + '" data-a="dset" data-k="' + k + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
   function tDesign() {
     var d = S.state.design, f = S.state.features, b = S.state.banner;
@@ -563,11 +571,11 @@
       return '<label class="fl half"><span class="fl-t">' + l + '</span><div class="clrf"><input class="fld clrp" type="color" data-clr="d-' + k + '" value="' + hv + '"><input class="fld clrh" type="text" maxlength="7" placeholder="#RRGGBB" data-clrh="d-' + k + '" value="' + hv + '"></div></label>';
     }
     var custBg = LSL.palette({ bg: 'custom', bgCustom: d.bgCustom || '#0A1428' }).bg;
-    var h = '<section class="af-sec flat"><h3>Colores</h3><div class="row2">' + dclr('accent', 'Color principal') + dclr('accent2', 'Color de destaque') + '</div>' +
+    var h = palHtml(d) + '<section class="af-sec flat"><h3>Colores</h3><div class="row2">' + dclr('accent', 'Color principal') + dclr('accent2', 'Color de destaque') + '</div>' +
       '<span class="fl-t">Fondo (modo oscuro)</span><div class="swatches">' + Object.keys(BGN).map(function (k) { var c = LSL.BGS[k]; return '<button class="sw' + (d.bg === k ? ' on' : '') + '" data-a="dset" data-k="bg" data-v="' + k + '" style="--sw:' + c.bg + ';--sw2:' + c.card + '"><i></i>' + BGN[k] + '</button>'; }).join('') +
       '<button class="sw' + (d.bg === 'custom' ? ' on' : '') + '" data-a="dset" data-k="bg" data-v="custom" style="--sw:' + custBg + ';--sw2:' + custBg + '"><i></i>Personalizado</button></div>' +
       (d.bg === 'custom' ? '<label class="fl"><span class="fl-t">Color de fondo (HEX)</span><div class="clrf"><input class="fld clrp" type="color" data-clr="d-bgCustom" value="' + U.hexOr(d.bgCustom, '#0A1428') + '"><input class="fld clrh" type="text" maxlength="7" placeholder="#RRGGBB" data-clrh="d-bgCustom" value="' + U.hexOr(d.bgCustom, '#0A1428') + '"></div></label>' : '') +
-      '<span class="fl-t">Modo por defecto</span>' + seg('mode', [['dark', 'Oscuro'], ['light', 'Claro']], d.mode) + '</section>';
+      '<span class="fl-t">Modo por defecto</span>' + seg('mode', [['dark', 'Oscuro'], ['light', 'Claro'], ['gray', 'Gris'], ['amoled', 'Negro']], d.mode) + '</section>';
     h += '<section class="af-sec flat"><h3>Navegación inferior</h3><p class="mut sm">Tocá un estilo y probalo abajo (tocá los íconos de la vista previa).</p>' + navPreview(d.nav, 0) +
       '<div class="chips wrapc">' + NAVS.map(function (n) { return '<button class="' + (d.nav === n[0] ? 'on' : '') + '" data-a="dset" data-k="nav" data-v="' + n[0] + '">' + n[1] + '</button>'; }).join('') + '</div>' +
       '<p class="mut sm">Cristal, Dock y Píldora usan desenfoque solo en rendimiento Alto. En modo Ligero se ven sólidos.</p></section>';
@@ -689,6 +697,17 @@
   });
   root.addEventListener('input', function (e) {
     var el = e.target, hk;
+    var pk0 = el.getAttribute && (el.getAttribute('data-clrh') || el.getAttribute('data-clr'));
+    if (pk0 && pk0.indexOf('p-') === 0) {
+      var pi = +pk0.slice(2), row = el.closest('.clrf'), isT = el.hasAttribute('data-clrh'), hx = U.hexn(el.value);
+      if (isT && !hx) { el.classList.add('bad'); return; }
+      el.classList.remove('bad'); hx = hx.toUpperCase();
+      if (isT) row.querySelector('[data-clr]').value = hx; else row.querySelector('[data-clrh]').value = hx;
+      design(function (d) { d.pal = (d.pal || []).slice(); d.pal[pi] = hx; });
+      var vals = [].map.call(document.querySelectorAll('#palw [data-clr]'), function (n) { return n.value; });
+      var pb = $('#palw .palbar'); if (pb && vals.length > 1) pb.style.background = 'linear-gradient(90deg,' + vals.join(',') + ')';
+      return;
+    }
     function dsnKey(hk) { return hk.indexOf('d-') === 0 ? hk.slice(2) : ''; }
     if ((hk = el.getAttribute('data-clrh'))) {                 // texto HEX -> color picker + valor guardado
       var hex = U.hexn(el.value);
@@ -774,6 +793,10 @@
       }
       case 'sq-add': $('#sq', openF.host).insertAdjacentHTML('beforeend', sqRow()); return;
       case 'sq-del': return el.closest('.sr').remove();
+      case 'pal-add': design(function (d) { d.pal = (d.pal || []).slice(0, 5); d.pal.push(U.hexOr(d.accent, '#CA2851')); }); return palRefresh();
+      case 'pal-del': design(function (d) { d.pal = (d.pal || []).filter(function (x, i) { return i !== +v; }); }); return palRefresh();
+      case 'pal-preset': design(function (d) { d.pal = ['#CA2851', '#FF6766', '#FFB173', '#FFE3B3']; }); return palRefresh();
+      case 'pal-clear': design(function (d) { d.pal = []; }); return palRefresh();
       case 'dset': {
         var k = el.getAttribute('data-k');
         design(function (d) { d[k] = v; });
