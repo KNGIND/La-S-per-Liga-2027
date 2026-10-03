@@ -276,6 +276,17 @@
     pending.forEach(rawPush); pending = [];
   }
   ['click', 'keydown', 'touchend'].forEach(function (ev) { doc.addEventListener(ev, activate, true); });
+
+  /* ---------- Manejo del botón atrás de Android (sincronización con WebView) ---------- */
+  LSL._handleAndroidBack = function () {
+    if (armed) { window.Android.exit(); return; }                         // segundo "atrás": salir de la app
+    var c = layers.pop();
+    if (c) { c(); return; }
+    if (tabStack.length) { go(tabStack.pop(), false, true); rawPush('buf'); return; }
+    armed = true; UI.toast('Presioná de nuevo para salir', 2000);
+    armT = setTimeout(function () { if (armed) { armed = false; rawPush('buf'); } }, 2000);
+  };
+
   LSL.pushLayer = function (close) { layers.push(close); place('layer'); };
   LSL.popLayer = function () {
     if (!layers.length) return;
