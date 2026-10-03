@@ -73,14 +73,57 @@ jobs:
       run: |
         npx cap sync android
 
-    - name: Build Android Project & Set Version
+    - name: Generate Keystore for Signing (Release APK)
+      run: |
+        if [ ! -f "$GITHUB_WORKSPACE/release.keystore" ]; then
+          echo "Generando keystore para firma del APK..."
+          keytool -genkey -v -keystore "$GITHUB_WORKSPACE/release.keystore" \
+            -keyalg RSA -keysize 2048 -validity 10000 -alias superliga \
+            -dname "CN=La Super Liga,O=Liga,C=AR" \
+            -storepass "superliga2024" -keypass "superliga2024"
+        else
+          echo "Usando keystore existente"
+        fi
+
+    - name: Configure Gradle Signing & Version
       run: |
         cd android
-        sed -i 's/versionName "1.0"/versionName "1.10"/g' app/build.gradle
-        ./gradlew assembleDebug
+        VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+        echo "Usando versionCode: $VERSION_CODE"
+        
+        # Crear archivo de propiedades de signing
+        cat > signing.properties <<EOF
+        storeFile=$GITHUB_WORKSPACE/release.keystore
+        storePassword=superliga2024
+        keyAlias=superliga
+        keyPassword=superliga2024
+        EOF
+        
+        # Actualizar build.gradle con versionCode dinámico y signing
+        sed -i "s/versionName \"1.0\"/versionName \"2.1.0\"/g" app/build.gradle
+        sed -i "/defaultConfig {/a\\        versionCode $VERSION_CODE" app/build.gradle
+        
+        # Agregar bloque de signing (si no existe)
+        if ! grep -q "signingConfigs {" app/build.gradle; then
+          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file('"'"'../release.keystore'"'"')\n            storePassword '"'"'superliga2024'"'"'\n            keyAlias '"'"'superliga'"'"'\n            keyPassword '"'"'superliga2024'"'"'\n        }\n    }\n' app/build.gradle
+          sed -i 's/release {/release {\n            signingConfig signingConfigs.release/' app/build.gradle
+        fi
 
-    - name: Upload APK
+    - name: Build Android Release APK
+      run: |
+        cd android
+        ./gradlew assembleRelease
+
+    - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: SuperLiga-APK
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: SuperLiga-Release-APK
+        path: android/app/build/outputs/apk/release/app-release.apk
+
+    - name: Upload Release APK (Alternative Name)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: SuperLiga-APK-v${{ github.run_number }}
+        path: android/app/build/outputs/apk/release/app-release.apk
+        
