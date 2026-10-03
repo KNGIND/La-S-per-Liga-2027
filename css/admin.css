@@ -298,3 +298,28 @@ input[type=range] { width: 100%; accent-color: var(--ac); height: 32px; }
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+
+/* ---------- Diseño visual (layout.js) ---------- */
+html.lay-on .hero, html.lay-on .mc, html.lay-on .ns, html.lay-on .nw, html.lay-on .tw, html.lay-on .card, html.lay-on .blk,
+html.lay-on #banner, html.lay-on #ann, html.lay-on #top { outline: 1.5px dashed color-mix(in srgb, var(--act) 70%, transparent); outline-offset: 2px; }
+html.lay-on .blk .hero, html.lay-on .blk .mc, html.lay-on .blk .nw { outline-offset: -2px; }
+.lay-frame { position: fixed; z-index: 96; border: 2px solid var(--act); border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,.18); }
+.lay-frame[hidden], .lay-tb[hidden] { display: none; }
+.lay-h { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--act); border: 3px solid var(--bg); pointer-events: auto; touch-action: none; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.lay-h::after { content: ''; position: absolute; inset: -14px; }
+.lay-h.tl { left: -11px; top: -11px; } .lay-h.tr { right: -11px; top: -11px; }
+.lay-h.bl { left: -11px; bottom: -11px; } .lay-h.br { right: -11px; bottom: -11px; }
+.lay-h.bm, .lay-h.rm { border-radius: 8px; background: var(--ac2); }
+.lay-h.bm { left: 50%; bottom: -9px; width: 44px; height: 14px; margin-left: -22px; }
+.lay-h.rm { top: 50%; right: -9px; width: 14px; height: 44px; margin-top: -22px; }
+.lay-tb { position: fixed; z-index: 97; width: min(340px, calc(100vw - 16px)); padding: 10px; display: flex; flex-direction: column; gap: 8px; border-radius: 18px; background: var(--card); color: var(--tx); border: 1px solid var(--line); box-shadow: var(--sh1); }
+.lay-t { display: flex; justify-content: space-between; align-items: center; gap: 8px; } .lay-t b { font-size: 14px; } .lay-t span { font-size: 12px; color: var(--live); font-weight: 700; }
+.lay-r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lay-r label { flex: 1; min-width: 130px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mut); }
+.lay-r input[type=color] { width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: none; flex: none; }
+.lay-r .fld { width: 76px; height: 34px; padding: 0 8px; font-size: 13px; text-transform: uppercase; }
+.lay-sc { display: inline-flex; align-items: center; gap: 6px; } .lay-sc b { min-width: 44px; text-align: center; font-size: 14px; }
+.lay-sc button, .lay-b { height: 34px; min-width: 34px; padding: 0 12px; border-radius: 10px; background: var(--card2); color: var(--tx); border: 1px solid var(--line); font-weight: 700; font-size: 13px; }
+.lay-sc button { font-size: 18px; padding: 0; }
+.lay-bar { position: fixed; z-index: 98; left: 50%; transform: translateX(-50%); bottom: calc(14px + var(--sab)); width: min(420px, calc(100vw - 16px)); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--sh1); }
+.lay-hint { flex: 1; text-align: center; font-size: 11.5px; color: var(--mut); line-height: 1.2; }

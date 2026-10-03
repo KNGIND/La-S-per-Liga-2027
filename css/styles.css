@@ -584,3 +584,43 @@ span.crest b { font-weight: 900; padding-bottom: 3px; }
   .top { gap: 4px; padding-right: 8px; }
   .livechip, .season { padding: 0 8px; }
 }
+
+/* Juego: pronósticos y ranking */
+.pr-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border-radius: var(--r); background: var(--card); border: 1px solid var(--line); }
+.pr-box.col { flex-direction: column; align-items: stretch; }
+.pr-t { display: flex; flex-direction: column; gap: 2px; } .pr-t b { font-size: 15px; } .pr-t small, .pr-k { color: var(--mut); font-size: 12.5px; }
+.pr-v { font: 800 22px/1 var(--fd); }
+.pr-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pr-row > i { color: var(--mut); font-style: normal; font-size: 22px; padding-top: 18px; }
+.pr-s { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.pr-s > span { font-size: 12.5px; color: var(--mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-s > div { display: flex; align-items: center; gap: 10px; }
+.pr-s b { font: 800 30px/1 var(--fd); min-width: 30px; text-align: center; }
+.pr-b { width: 38px; height: 38px; border-radius: 50%; background: var(--card2); color: var(--tx); font: 700 20px/1 var(--fb); border: 1px solid var(--line); }
+.pr-b:active { transform: scale(.92); }
+.rk-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.rk-top b { display: block; font-size: 16px; } .rk-top small { color: var(--mut); font-size: 12.5px; }
+.rk-streak { padding: 5px 10px; border-radius: 12px; background: var(--ac-soft); color: var(--act); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.rk { display: flex; flex-direction: column; gap: 8px; }
+.rk-r { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.rk-r.me { border-color: var(--act); background: var(--ac-soft); }
+.rk-p { width: 24px; text-align: center; font: 800 18px/1 var(--fd); color: var(--mut); }
+.rk-r.top .rk-p { color: var(--pts); }
+.rk-n { flex: 1; min-width: 0; } .rk-n b { display: block; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rk-n small { color: var(--mut); font-size: 12px; }
+.rk-pt { font: 800 22px/1 var(--fd); text-align: right; } .rk-pt small { display: block; font: 600 10.5px/1.2 var(--fb); color: var(--mut); }
+
+/* ---------- Pantallas grandes: tablet, PC y TV (el celular queda igual) ---------- */
+@media (min-width: 900px) {
+  .view { max-width: 980px; padding-left: 20px; padding-right: 20px; }
+  .top { padding-left: max(14px, calc((100vw - 980px) / 2 + 6px)); padding-right: max(14px, calc((100vw - 980px) / 2 + 6px)); }
+  .view .stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .view .stack > .empty, .view .stack > .note, .view .stack > h2, .view .stack > h3 { grid-column: 1 / -1; }
+}
+@media (min-width: 1280px) {
+  .view { max-width: 1240px; }
+  .top { padding-left: max(14px, calc((100vw - 1240px) / 2 + 6px)); padding-right: max(14px, calc((100vw - 1240px) / 2 + 6px)); }
+  .view .stack { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1700px) { .view { zoom: 1.2; } }
+@media (min-width: 2400px) { .view { zoom: 1.6; } }
+@media (hover: hover) and (pointer: fine) { .mc:hover, .nw:hover, .hero:hover { filter: brightness(1.06); } }
