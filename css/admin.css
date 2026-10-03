@@ -323,3 +323,7 @@ html.lay-on .blk .hero, html.lay-on .blk .mc, html.lay-on .blk .nw { outline-off
 .lay-sc button { font-size: 18px; padding: 0; }
 .lay-bar { position: fixed; z-index: 98; left: 50%; transform: translateX(-50%); bottom: calc(14px + var(--sab)); width: min(420px, calc(100vw - 16px)); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--sh1); }
 .lay-hint { flex: 1; text-align: center; font-size: 11.5px; color: var(--mut); line-height: 1.2; }
+
+.lay-frame.only-v .lay-h:not(.bm) { display: none; }
+.palbar { height: 26px; border-radius: 99px; border: 1px solid var(--line); margin: 8px 0; }
+#palw .clrf { display: flex; gap: 8px; align-items: center; margin: 6px 0; }

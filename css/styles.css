@@ -331,10 +331,10 @@ span.crest b { font-weight: 900; padding-bottom: 3px; }
 .art h2 { margin: 6px 0 10px; font: 900 30px/1.05 var(--fd); }
 .art p { margin-top: 12px; max-width: 65ch; }
 .art .lead { color: var(--mut); font-size: 16px; }
-.toast { position: fixed; left: 50%; bottom: calc(var(--navh) + 30px + var(--sab)); z-index: 90; max-width: 88vw; padding: 10px 16px; border-radius: 12px; background: var(--tx); color: var(--bg); font-size: 14px; font-weight: 600; text-align: center; opacity: 0; transform: translate(-50%, 10px); pointer-events: none; }
+.toast { position: fixed; left: 50%; bottom: calc(var(--navh) + 30px + var(--sab)); z-index: 90; max-width: 88vw; padding: 11px 18px; border-radius: 14px; color: var(--tx); font-size: 14px; font-weight: 600; text-align: center; opacity: 0; transform: translate(-50%, 10px); pointer-events: none; border: 1.5px solid transparent; background: linear-gradient(var(--card2), var(--card2)) padding-box, var(--grad, linear-gradient(90deg, var(--ac), var(--ac2))) border-box; box-shadow: var(--sh2); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
-.toast.warn { background: var(--ac2); color: #2B1E00; }
-.toast.err { background: var(--live); color: #fff; }
+.toast.warn { background: linear-gradient(var(--card2), var(--card2)) padding-box, var(--ac2) border-box; }
+.toast.err { background: linear-gradient(var(--card2), var(--card2)) padding-box, var(--live) border-box; }
 
 /* ===== Navegación inferior · 11 estilos (data-nav) ===== */
 #nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding-bottom: var(--sab); pointer-events: none; }
@@ -624,3 +624,17 @@ span.crest b { font-weight: 900; padding-bottom: 3px; }
 @media (min-width: 1700px) { .view { zoom: 1.2; } }
 @media (min-width: 2400px) { .view { zoom: 1.6; } }
 @media (hover: hover) and (pointer: fine) { .mc:hover, .nw:hover, .hero:hover { filter: brightness(1.06); } }
+
+/* ===== Temas extra: Gris (estilo AOSP) y Negro total (estilo iOS oscuro) ===== */
+:root[data-theme=gray] { --bg: #202124; --bg2: #292A2D; --card: #303134; --card2: #3C4043; --line: #4A4D51; --tx: #E8EAED; --mut: #A0A5AB; --dim: #80868B; --sh1: 0 8px 22px rgba(0,0,0,.35); --sh2: 0 6px 14px rgba(0,0,0,.35); color-scheme: dark; }
+:root[data-theme=amoled] { --bg: #000000; --bg2: #000000; --card: #1C1C1E; --card2: #2C2C2E; --line: #38383A; --tx: #FFFFFF; --mut: #98989F; --dim: #6C6C70; --sh1: none; --sh2: none; color-scheme: dark; }
+:root[data-theme=light] { color-scheme: light; }
+
+/* ===== Combinación de colores (degradado) y carteles con el color de la página ===== */
+:root[data-pal] .btn:not(.ghost) { background: var(--grad); color: var(--on-grad); }
+:root[data-pal] .top { border-image: var(--grad) 1; }
+:root[data-pal] .upd-ic { background: var(--grad); color: var(--on-grad); }
+:root[data-pal][data-perf=full] body { background: radial-gradient(60% 38% at 50% 0%, color-mix(in srgb, var(--p1) 20%, transparent), transparent 72%), radial-gradient(55% 34% at 100% 38%, color-mix(in srgb, var(--pl) 14%, transparent), transparent 72%), var(--bg); background-attachment: fixed; }
+.upd-scrim { background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.upd-c { border: 1.5px solid transparent; background: linear-gradient(var(--bg2), var(--bg2)) padding-box, var(--grad, linear-gradient(90deg, var(--ac), var(--ac2))) border-box; }
+.upd-bar i { background: var(--grad, linear-gradient(90deg, var(--ac), var(--ac2))); }
