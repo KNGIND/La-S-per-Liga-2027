@@ -1,8 +1,9 @@
 {
   "name": "La Súper Liga",
   "short_name": "LSL",
-  "start_url": "./",
-  "scope": "./",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#04101F",
   "theme_color": "#04101F",
