@@ -609,24 +609,55 @@ span.crest b { font-weight: 900; padding-bottom: 3px; }
 .rk-n { flex: 1; min-width: 0; } .rk-n b { display: block; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rk-n small { color: var(--mut); font-size: 12px; }
 .rk-pt { font: 800 22px/1 var(--fd); text-align: right; } .rk-pt small { display: block; font: 600 10.5px/1.2 var(--fb); color: var(--mut); }
 
-/* ---------- Pantallas grandes: tablet, PC y TV (el celular queda igual) ---------- */
-@media (min-width: 900px) {
+/* ==========================================================================
+   BREAKPOINTS ADAPTADOS (Basados en la guía de diseño responsivo)
+   ========================================================================== */
+
+/* 1. MÓVIL (Por defecto va el código base del archivo. Aquí añadimos reglas específicas hasta 575.98px) */
+@media (max-width: 575.98px) {
+  .brand { font-size: 17px; }
+  .top { gap: 4px; padding-right: 8px; }
+  .livechip, .season { padding: 0 8px; }
+}
+
+/* 2. TABLET (Desde 768px hasta 991.98px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .top { 
+    padding-left: max(14px, calc((100vw - 640px) / 2)); 
+    padding-right: max(14px, calc((100vw - 640px) / 2)); 
+  }
+}
+
+/* 3. DESKTOP / PANTALLAS ESTÁNDAR (Desde 992px hasta 1199.98px) */
+@media (min-width: 992px) and (max-width: 1199.98px) {
   .view { max-width: 980px; padding-left: 20px; padding-right: 20px; }
-  .top { padding-left: max(14px, calc((100vw - 980px) / 2 + 6px)); padding-right: max(14px, calc((100vw - 980px) / 2 + 6px)); }
+  .top { 
+    padding-left: max(14px, calc((100vw - 980px) / 2 + 6px)); 
+    padding-right: max(14px, calc((100vw - 980px) / 2 + 6px)); 
+  }
   .view .stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .view .stack > .empty, .view .stack > .note, .view .stack > h2, .view .stack > h3 { grid-column: 1 / -1; }
 }
-@media (min-width: 1280px) {
+
+/* 4. EXTRA LARGE DEVICES / PANTALLAS GRANDES (Desde 1200px en adelante) */
+@media (min-width: 1200px) {
   .view { max-width: 1240px; }
-  .top { padding-left: max(14px, calc((100vw - 1240px) / 2 + 6px)); padding-right: max(14px, calc((100vw - 1240px) / 2 + 6px)); }
-  .view .stack { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .top { 
+    padding-left: max(14px, calc((100vw - 1240px) / 2 + 6px)); 
+    padding-right: max(14px, calc((100vw - 1240px) / 2 + 6px)); 
+  }
+  /* En pantallas muy grandes dividimos el contenido en 3 columnas */
+  .view .stack { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .view .stack > .empty, .view .stack > .note, .view .stack > h2, .view .stack > h3 { grid-column: 1 / -1; }
 }
+
+/* Soporte para pantallas gigantes, efectos hover y temas extra (Permanecen intactos) */
 @media (min-width: 1700px) { .view { zoom: 1.2; } }
 @media (min-width: 2400px) { .view { zoom: 1.6; } }
 @media (hover: hover) and (pointer: fine) { .mc:hover, .nw:hover, .hero:hover { filter: brightness(1.06); } }
 
 /* ===== Temas extra: Gris (estilo AOSP) y Negro total (estilo iOS oscuro) ===== */
-:root[data-theme=gray] { --bg: #202124; --bg2: #292A2D; --card: #303134; --card2: #3C4043; --line: #4A4D51; --tx: #E8EAED; --mut: #A0A5AB; --dim: #80868B; --sh1: 0 8px 22px rgba(0,0,0,.35); --sh2: 0 6px 14px rgba(0,0,0,.35); color-scheme: dark; }
+:root[data-theme=gray] { --bg: #202124; --bg2: #292A2D; --card: #303134; --card2: #3C4043; --line: #4A4D51; --tx: #E8EAED; --mut: #A0A5AB; --dim: #80868B; --sh1: none; --sh2: none; color-scheme: dark; }
 :root[data-theme=amoled] { --bg: #000000; --bg2: #000000; --card: #1C1C1E; --card2: #2C2C2E; --line: #38383A; --tx: #FFFFFF; --mut: #98989F; --dim: #6C6C70; --sh1: none; --sh2: none; color-scheme: dark; }
 :root[data-theme=light] { color-scheme: light; }
 
