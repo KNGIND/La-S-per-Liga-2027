@@ -66,82 +66,22 @@ jobs:
 
         sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' $MANIFEST_PATH
         sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' $MANIFEST_PATH
+        # (Se quitó el bloque que editaba MainActivity.java: buscaba la WebView con un id inválido y no hacía nada.
+        #  Capacitor ya activa JavaScript y DOM storage por su cuenta.)
 
     - name: Sync Capacitor Projects
       run: |
         npx cap sync android
 
-    - name: Generate Keystore for Release Signing
+    - name: Build Android Project & Set Version
       run: |
         cd android
-        if [ ! -f "$GITHUB_WORKSPACE/release.keystore" ]; then
-          echo "Generando keystore de firma..."
-          keytool -genkey -v -keystore "$GITHUB_WORKSPACE/release.keystore" \
-            -keyalg RSA -keysize 2048 -validity 10000 -alias superliga \
-            -dname "CN=La Super Liga,O=Liga,C=AR" \
-            -storepass "superliga2024" -keypass "superliga2024"
-        fi
-        
-        # Crear gradle.properties con las credenciales
-        cat > gradle.properties <<EOF
-        org.gradle.jvmargs=-Xmx2048m
-        android.useAndroidX=true
-        android.enableJetifier=true
-        android.compileSdk=34
-        org.gradle.parallel=true
-        
-        # Signing
-        KEYSTORE_FILE=$GITHUB_WORKSPACE/release.keystore
-        KEYSTORE_PASSWORD=superliga2024
-        KEY_ALIAS=superliga
-        KEY_PASSWORD=superliga2024
-        
-        # Version (versionCode incremental, versionName legible)
-        VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
-        VERSION_NAME=2.1.0
-        EOF
-
-    - name: Add Version to Build (Gradle Injection)
-      run: |
-        cd android/app
-        # Inyectar versionCode y versionName sin tocar la estructura de Gradle
-        cat >> build.gradle <<'INJECTED'
-
-        // Inyección dinámica de versión desde gradle.properties
-        afterEvaluate {
-          android {
-            if (project.hasProperty('VERSION_CODE')) {
-              defaultConfig.versionCode = Integer.parseInt(project.VERSION_CODE.toString())
-            }
-            if (project.hasProperty('VERSION_NAME')) {
-              defaultConfig.versionName = project.VERSION_NAME.toString()
-            }
-          }
-        }
-        INJECTED
-
-    - name: Build Android Release APK
-      run: |
-        cd android
-        ./gradlew assembleRelease
-
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: SuperLiga-APK-v${{ github.run_number }}
-        path: android/app/build/outputs/apk/release/app-release.apk
-
-    - name: Build Android Debug APK (Fallback)
-      if: failure()
-      run: |
-        cd android
-        echo "Release falló, compilando debug como fallback..."
+        sed -i 's/versionName "1.0"/versionName "1.10"/g' app/build.gradle
         ./gradlew assembleDebug
 
-    - name: Upload Debug APK (Fallback)
-      if: failure()
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: SuperLiga-APK-DEBUG-v${{ github.run_number }}
+        name: SuperLiga-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
         
