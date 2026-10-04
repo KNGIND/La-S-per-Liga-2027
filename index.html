@@ -6,9 +6,10 @@
 <title>La Super Liga</title>
 <meta name="description" content="Calendario, tabla y partidos de La Súper Liga.">
 <meta name="theme-color" content="#04101F">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#04101F">
+<link rel="apple-touch-icon" href="/icon-192.png">
 
 <!-- Evita el "parpadeo" de tema/rendimiento antes de que cargue el JS.
      data-launch: "fresh" = abriste la app de cero (se muestra la bienvenida) · "resume" = volvés de segundo plano / recarga del navegador (se retoma donde estabas). -->
@@ -252,6 +253,11 @@ window.__LSL_CODE_READY__.then(function (data) {
   }
   el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
 })();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}
 </script>
 </body>
 </html>
