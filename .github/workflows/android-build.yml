@@ -66,48 +66,59 @@ jobs:
 
         sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' $MANIFEST_PATH
         sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' $MANIFEST_PATH
-        # (Se quitó el bloque que editaba MainActivity.java: buscaba la WebView con un id inválido y no hacía nada.
-        #  Capacitor ya activa JavaScript y DOM storage por su cuenta.)
 
     - name: Sync Capacitor Projects
       run: |
         npx cap sync android
 
-    - name: Generate Keystore for Signing (Release APK)
+    - name: Generate Keystore for Release Signing
       run: |
+        cd android
         if [ ! -f "$GITHUB_WORKSPACE/release.keystore" ]; then
-          echo "Generando keystore para firma del APK..."
+          echo "Generando keystore de firma..."
           keytool -genkey -v -keystore "$GITHUB_WORKSPACE/release.keystore" \
             -keyalg RSA -keysize 2048 -validity 10000 -alias superliga \
             -dname "CN=La Super Liga,O=Liga,C=AR" \
             -storepass "superliga2024" -keypass "superliga2024"
-        else
-          echo "Usando keystore existente"
         fi
-
-    - name: Configure Gradle Signing & Version
-      run: |
-        cd android
+        
+        # Crear gradle.properties con las credenciales
+        cat > gradle.properties <<EOF
+        org.gradle.jvmargs=-Xmx2048m
+        android.useAndroidX=true
+        android.enableJetifier=true
+        android.compileSdk=34
+        org.gradle.parallel=true
+        
+        # Signing
+        KEYSTORE_FILE=$GITHUB_WORKSPACE/release.keystore
+        KEYSTORE_PASSWORD=superliga2024
+        KEY_ALIAS=superliga
+        KEY_PASSWORD=superliga2024
+        
+        # Version (versionCode incremental, versionName legible)
         VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
-        echo "Usando versionCode: $VERSION_CODE"
-        
-        # Crear archivo de propiedades de signing
-        cat > signing.properties <<EOF
-        storeFile=$GITHUB_WORKSPACE/release.keystore
-        storePassword=superliga2024
-        keyAlias=superliga
-        keyPassword=superliga2024
+        VERSION_NAME=2.1.0
         EOF
-        
-        # Actualizar build.gradle con versionCode dinámico y signing
-        sed -i "s/versionName \"1.0\"/versionName \"2.1.0\"/g" app/build.gradle
-        sed -i "/defaultConfig {/a\\        versionCode $VERSION_CODE" app/build.gradle
-        
-        # Agregar bloque de signing (si no existe)
-        if ! grep -q "signingConfigs {" app/build.gradle; then
-          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file('"'"'../release.keystore'"'"')\n            storePassword '"'"'superliga2024'"'"'\n            keyAlias '"'"'superliga'"'"'\n            keyPassword '"'"'superliga2024'"'"'\n        }\n    }\n' app/build.gradle
-          sed -i 's/release {/release {\n            signingConfig signingConfigs.release/' app/build.gradle
-        fi
+
+    - name: Add Version to Build (Gradle Injection)
+      run: |
+        cd android/app
+        # Inyectar versionCode y versionName sin tocar la estructura de Gradle
+        cat >> build.gradle <<'INJECTED'
+
+        // Inyección dinámica de versión desde gradle.properties
+        afterEvaluate {
+          android {
+            if (project.hasProperty('VERSION_CODE')) {
+              defaultConfig.versionCode = Integer.parseInt(project.VERSION_CODE.toString())
+            }
+            if (project.hasProperty('VERSION_NAME')) {
+              defaultConfig.versionName = project.VERSION_NAME.toString()
+            }
+          }
+        }
+        INJECTED
 
     - name: Build Android Release APK
       run: |
@@ -117,13 +128,20 @@ jobs:
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: SuperLiga-Release-APK
-        path: android/app/build/outputs/apk/release/app-release.apk
-
-    - name: Upload Release APK (Alternative Name)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
         name: SuperLiga-APK-v${{ github.run_number }}
         path: android/app/build/outputs/apk/release/app-release.apk
+
+    - name: Build Android Debug APK (Fallback)
+      if: failure()
+      run: |
+        cd android
+        echo "Release falló, compilando debug como fallback..."
+        ./gradlew assembleDebug
+
+    - name: Upload Debug APK (Fallback)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: SuperLiga-APK-DEBUG-v${{ github.run_number }}
+        path: android/app/build/outputs/apk/debug/app-debug.apk
         
