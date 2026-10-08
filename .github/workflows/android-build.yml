@@ -23,24 +23,29 @@ jobs:
 
       - name: Verificar secretos de firma
         env:
-          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          P1: ${{ secrets.ANDROID_KEYSTORE_PART_1 }}
+          P2: ${{ secrets.ANDROID_KEYSTORE_PART_2 }}
+          P3: ${{ secrets.ANDROID_KEYSTORE_PART_3 }}
+          P4: ${{ secrets.ANDROID_KEYSTORE_PART_4 }}
+          P5: ${{ secrets.ANDROID_KEYSTORE_PART_5 }}
+          P6: ${{ secrets.ANDROID_KEYSTORE_PART_6 }}
+          P7: ${{ secrets.ANDROID_KEYSTORE_PART_7 }}
+          P8: ${{ secrets.ANDROID_KEYSTORE_PART_8 }}
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          echo "Largo de ANDROID_KEYSTORE_B64: ${#KS_B64} caracteres"
-          echo "Largo de ANDROID_KEYSTORE_PASSWORD: ${#KS_PASS} caracteres"
+          echo "Largo de cada parte: P1=${#P1} P2=${#P2} P3=${#P3} P4=${#P4} P5=${#P5} P6=${#P6} P7=${#P7} P8=${#P8}"
+          echo "Largo de la contraseña del almacén: ${#KS_PASS}"
+          KS_B64="$P1$P2$P3$P4$P5$P6$P7$P8"
           if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
-            echo "::error::Faltan secretos: ANDROID_KEYSTORE_B64 o ANDROID_KEYSTORE_PASSWORD"
+            echo "::error::Faltan secretos: ANDROID_KEYSTORE_PART_1 (y siguientes) o ANDROID_KEYSTORE_PASSWORD"
             exit 1
           fi
-          # Quita espacios y saltos de línea que pueden colarse al copiar desde Termux
           printf '%s' "$KS_B64" | tr -d ' \r\n\t' | base64 -d > release.jks
           echo "SHA-256 del archivo reconstruido: $(sha256sum release.jks | cut -d' ' -f1)"
-          # Lista los alias que tiene la clave (no son secretos)
           keytool -list -keystore release.jks -storepass "$KS_PASS" | grep -i "PrivateKeyEntry" || {
-            echo "::error::La clave no tiene ninguna entrada de clave privada. Revisá que el archivo sea el que generaste en Termux."
+            echo "::error::La clave no tiene ninguna entrada de clave privada. Revisá que las partes estén completas y en orden."
             exit 1
           }
-          # Detecta el alias real automáticamente
           ALIAS_REAL=$(keytool -list -keystore release.jks -storepass "$KS_PASS" | grep -m1 "PrivateKeyEntry" | cut -d, -f1 | tr -d ' ')
           echo "Alias detectado: $ALIAS_REAL"
           echo "KEY_ALIAS_REAL=$ALIAS_REAL" >> "$GITHUB_ENV"
