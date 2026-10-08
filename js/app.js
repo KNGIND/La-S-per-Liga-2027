@@ -278,8 +278,19 @@
   ['click', 'keydown', 'touchend'].forEach(function (ev) { doc.addEventListener(ev, activate, true); });
 
   /* ---------- Manejo del botón atrás de Android (sincronización con WebView) ---------- */
+  function exitApp() {                                                  // cierra la app según dónde corra
+    var C = w.Capacitor;
+    if (C && C.Plugins && C.Plugins.App && C.Plugins.App.exitApp) { C.Plugins.App.exitApp(); return; }
+    if (w.Android && w.Android.exit) { w.Android.exit(); return; }
+  }
+  // En la APK (Capacitor), el botón atrás llega por el plugin App en vez de por popstate
+  (function hookNativeBack(n) {
+    var C = w.Capacitor, A = C && C.Plugins && C.Plugins.App;
+    if (A && A.addListener) { A.addListener('backButton', function () { LSL._handleAndroidBack(); }); return; }
+    if ((n | 0) < 50) setTimeout(function () { hookNativeBack((n | 0) + 1); }, 200);
+  })(0);
   LSL._handleAndroidBack = function () {
-    if (armed) { window.Android.exit(); return; }                         // segundo "atrás": salir de la app
+    if (armed) { exitApp(); return; }                         // segundo "atrás": salir de la app
     var c = layers.pop();
     if (c) { c(); return; }
     if (tabStack.length) { go(tabStack.pop(), false, true); rawPush('buf'); return; }
