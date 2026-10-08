@@ -1,0 +1,115 @@
+name: Build Android APK (ventana a la web)
+
+# El APK solo muestra la web. Los cambios de js/css/datos se ven sin regenerarlo.
+# Este workflow solo corre cuando cambia ESTE archivo o a mano (Run workflow).
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - name: Verificar secretos de firma
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ] || [ -z "$KS_ALIAS" ]; then
+            echo "::error::Faltan secretos: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD o ANDROID_KEY_ALIAS"
+            exit 1
+          fi
+          echo "$KS_B64" | base64 -d > release.jks
+          keytool -list -keystore release.jks -storepass "$KS_PASS" >/dev/null && echo "Firma OK"
+
+      - name: Crear proyecto Capacitor apuntando a la web
+        run: |
+          mkdir -p public_dist
+          echo '<!doctype html><title>La Súper Liga</title>' > public_dist/index.html
+          cat > capacitor.config.json <<'JSON'
+          {
+            "appId": "com.lasuperliga.app",
+            "appName": "La Súper Liga",
+            "webDir": "public_dist",
+            "server": {
+              "url": "https://la-s-per-liga-2027.vercel.app/",
+              "cleartext": false
+            }
+          }
+          JSON
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap add android
+
+      - name: Poner el ícono de la liga
+        run: |
+          if [ -f icons/icon-512.png ]; then
+            for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$size
+              cp icons/icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher.png
+              cp icons/icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher_round.png
+              cp icons/icon-512.png android/app/src/main/res/mipmap-$size/ic_launcher_foreground.png
+            done
+            rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          else
+            echo "::warning::No se encontró icons/icon-512.png; queda el ícono por defecto"
+          fi
+
+      - name: Configurar firma y versión
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          mv release.jks android/release.jks
+          # versionCode crece con cada build, así Android siempre acepta la actualización
+          cat >> android/app/build.gradle <<GRADLE
+
+          android {
+              defaultConfig {
+                  versionCode ${{ github.run_number }} + 1000
+                  versionName "3.0.${{ github.run_number }}"
+              }
+              signingConfigs {
+                  release {
+                      storeFile file('../release.jks')
+                      storePassword System.getenv('KS_PASS')
+                      keyAlias System.getenv('KS_ALIAS')
+                      keyPassword System.getenv('KS_PASS')
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          GRADLE
+          npx cap sync android
+
+      - name: Compilar APK firmado
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Subir el APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperLiga-APK-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          
