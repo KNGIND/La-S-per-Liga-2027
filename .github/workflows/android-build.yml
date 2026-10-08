@@ -37,6 +37,10 @@ jobs:
           # Quita espacios y saltos de línea que pueden colarse al copiar desde Termux
           printf '%s' "$KS_B64" | tr -d ' \r\n\t' | base64 -d > release.jks
           keytool -list -keystore release.jks -storepass "$KS_PASS" | head -5
+          if ! keytool -list -keystore release.jks -storepass "$KS_PASS" -alias "$KS_ALIAS" >/dev/null 2>&1; then
+            echo "::error::El alias '$KS_ALIAS' no existe en la clave. Mirá la lista de arriba y corregí ANDROID_KEY_ALIAS."
+            exit 1
+          fi
           echo "Firma OK"
 
       - name: Crear proyecto Capacitor apuntando a la web
@@ -91,7 +95,7 @@ jobs:
                       storeFile file('../release.jks')
                       storePassword System.getenv('KS_PASS')
                       keyAlias System.getenv('KS_ALIAS')
-                      keyPassword System.getenv('KS_PASS')
+                      keyPassword System.getenv('KEY_PASS')
                   }
               }
               buildTypes {
@@ -106,6 +110,7 @@ jobs:
       - name: Compilar APK firmado
         env:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
           KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         working-directory: android
         run: |
