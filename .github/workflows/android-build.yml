@@ -34,6 +34,7 @@ jobs:
           fi
           # Quita espacios y saltos de línea que pueden colarse al copiar desde Termux
           printf '%s' "$KS_B64" | tr -d ' \r\n\t' | base64 -d > release.jks
+          echo "SHA-256 del archivo reconstruido: $(sha256sum release.jks | cut -d' ' -f1)"
           # Lista los alias que tiene la clave (no son secretos)
           keytool -list -keystore release.jks -storepass "$KS_PASS" | grep -i "PrivateKeyEntry" || {
             echo "::error::La clave no tiene ninguna entrada de clave privada. Revisá que el archivo sea el que generaste en Termux."
