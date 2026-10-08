@@ -27,12 +27,17 @@ jobs:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          echo "Largo de ANDROID_KEYSTORE_B64: ${#KS_B64} caracteres"
+          echo "Largo de ANDROID_KEYSTORE_PASSWORD: ${#KS_PASS} caracteres"
+          echo "ANDROID_KEY_ALIAS: $KS_ALIAS"
           if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ] || [ -z "$KS_ALIAS" ]; then
             echo "::error::Faltan secretos: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD o ANDROID_KEY_ALIAS"
             exit 1
           fi
-          echo "$KS_B64" | base64 -d > release.jks
-          keytool -list -keystore release.jks -storepass "$KS_PASS" >/dev/null && echo "Firma OK"
+          # Quita espacios y saltos de línea que pueden colarse al copiar desde Termux
+          printf '%s' "$KS_B64" | tr -d ' \r\n\t' | base64 -d > release.jks
+          keytool -list -keystore release.jks -storepass "$KS_PASS" | head -5
+          echo "Firma OK"
 
       - name: Crear proyecto Capacitor apuntando a la web
         run: |
