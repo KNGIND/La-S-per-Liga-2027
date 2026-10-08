@@ -20,11 +20,11 @@
     bc: '', bw: 0, glow: '', gi: 0, op: 100,
     aopen: 'spring', speed: 100, idle: 'none', dotk: 'pulse', tr: 'fade',
     tap: 'expand', go: 'matches', close_after: 3, cycle: 0, auto_every: 0, auto_for: 4,
-    alert: false, haptic: true,
+    alert: false, alert_news: false, haptic: true, fit: true,
     slides: [{ t: 'league' }]
   };
   var cfg = clone(DEF), el = null, open = false, idx = 0, playing = false, audio = null;
-  var tClose = 0, tCycle = 0, tAuto = 0, tTick = 0, tSave = 0, lastSig = null, panel = null, tab = 'design';
+  var tClose = 0, tCycle = 0, tAuto = 0, tTick = 0, tSave = 0, panel = null, tab = 'design', popAct = null, popping = false, minSeen = {}, scores = {};
 
   /* ---------- utilidades ---------- */
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -54,10 +54,43 @@
     var dd = Math.floor(ms / 864e5), hh = Math.floor(ms % 864e5 / 36e5), mm = Math.floor(ms % 36e5 / 6e4);
     return dd > 0 ? dd + 'd ' + hh + 'h' : (hh > 0 ? hh + 'h ' + mm + 'm' : mm + ' min');
   }
-  function vib() { try { if (cfg.haptic && navigator.vibrate) navigator.vibrate(8); } catch (e) { } }
+  function vib(p) { try { if (cfg.haptic && navigator.vibrate) navigator.vibrate(p || 8); } catch (e) { } }
+
+  /* ---------- datos para las funciones nuevas ---------- */
+  function logoSrc() { var s = st(); return (s && s.league && s.league.logo) || ''; }
+  function dotKind() { if (playing) return 'bars'; if (cfg.dotk === 'logo') return logoSrc() ? 'logo' : 'pulse'; return cfg.dotk; }
+  function trackMinutes() { liveMatches().forEach(function (m) { var v = String(m.minute == null ? '' : m.minute), o = minSeen[m.id]; if (!o || o.v !== v) minSeen[m.id] = { v: v, t: Date.now() }; }); }
+  function minuteLabel(m) {
+    if (m.status === 'paused') return 'Descanso';
+    var raw = String(m.minute == null ? '' : m.minute).trim(); if (!raw) return 'En vivo';
+    var n = parseInt(raw, 10); if (isNaN(n) || /[+:]/.test(raw)) return raw + "'";
+    var o = minSeen[m.id], add = o ? Math.min(20, Math.floor((Date.now() - o.t) / 60000)) : 0;
+    return (n + add) + "'";
+  }
+  function myTeamHTML() {
+    var s = st(); if (!s) return null;
+    var id = (L().prefs || {}).fav, t = id && team(id);
+    if (!t) return '<span class="em">🛡️</span><div class="tx"><b>Elegí tu equipo</b><small>En la pestaña Perfil</small></div>';
+    var pos = -1, row = null; S().standings().forEach(function (r, i) { if (r.id === t.id) { pos = i; row = r; } });
+    var fin = s.matches.filter(function (m) { return m.status === 'finished' && (m.home === t.id || m.away === t.id); }).sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    var lm = fin[fin.length - 1], sub = 'Sin partidos jugados';
+    if (lm) {
+      var home = lm.home === t.id, gf = (home ? +lm.hs : +lm.as) || 0, gc = (home ? +lm.as : +lm.hs) || 0;
+      sub = (gf > gc ? 'Ganó ' : (gf < gc ? 'Perdió ' : 'Empató ')) + gf + '-' + gc + ' vs ' + tn(home ? lm.away : lm.home) + (gf === gc && lm.pens ? ' (pen. ' + lm.pens + ')' : '');
+    }
+    return '<i class="td" style="background:' + tc(t.id) + '"></i><div class="tx"><b>' + esc(t.short || t.name) + (row ? ' · ' + (pos + 1) + '° · ' + row.pts + ' pts' : '') + '</b><small>' + esc(sub) + '</small></div>';
+  }
+  function lastGoal(m, side) {
+    var ev = (m.events || []).filter(function (e) { var ty = String(e.type || ''); return (ty === 'goal' && e.side === side) || (ty === 'own' && e.side !== side); });
+    ev.sort(function (a, b) { return (+a.min || 0) - (+b.min || 0); }); return ev[ev.length - 1] || null;
+  }
+  function goalHTML(m, side) {
+    var g = lastGoal(m, side), t = side === 'h' ? m.home : m.away;
+    return '<span class="em">⚽</span><div class="tx"><b>¡GOL! ' + esc(g && g.player ? g.player : tn(t)) + '</b><small>' + esc(tn(m.home)) + ' ' + (+m.hs || 0) + ' - ' + (+m.as || 0) + ' ' + esc(tn(m.away)) + (g && g.min ? ' · ' + esc(g.min) + "'" : '') + '</small></div>';
+  }
 
   /* ---------- contenido (diapositivas) ---------- */
-  var TYPES = [['league', 'Nombre de la liga'], ['text', 'Texto'], ['next', 'Próximo partido'], ['live', 'Partido en vivo'], ['countdown', 'Cuenta regresiva'], ['music', 'Canción'], ['photo', 'Foto'], ['clock', 'Reloj'], ['ticker', 'Texto que se desliza']];
+  var TYPES = [['league', 'Nombre de la liga'], ['text', 'Texto'], ['next', 'Próximo partido'], ['live', 'Partido en vivo (marcador TV)'], ['myteam', 'Tu equipo (puesto y último resultado)'], ['countdown', 'Cuenta regresiva'], ['music', 'Canción'], ['photo', 'Foto'], ['clock', 'Reloj'], ['ticker', 'Texto que se desliza']];
   function slideHTML(s) {
     var m, now = new Date();
     switch (s.t) {
@@ -66,22 +99,30 @@
       case 'next': m = nextMatch(); if (!m) return null;
         return '<div class="tx"><div class="vs"><i class="td" style="background:' + tc(m.home) + '"></i><span>' + esc(tn(m.home)) + '</span><em>vs</em><span>' + esc(tn(m.away)) + '</span><i class="td" style="background:' + tc(m.away) + '"></i></div><small>' + esc(fmtDay(m.date)) + '</small></div>';
       case 'live': m = liveMatches()[0]; if (!m) return null;
-        return '<div class="tx"><div class="vs"><span>' + esc(tn(m.home)) + '</span><b class="sc">' + (+m.hs || 0) + ' - ' + (+m.as || 0) + '</b><span>' + esc(tn(m.away)) + '</span></div><small class="lv">● ' + (m.minute ? esc(m.minute) + "'" : 'En vivo') + '</small></div>';
+        return '<div class="tx"><div class="itv"><i class="bar" style="background:' + tc(m.home) + '"></i><span>' + esc(tn(m.home)) + '</span><strong class="isc">' + (+m.hs || 0) + ' - ' + (+m.as || 0) + '</strong><span>' + esc(tn(m.away)) + '</span><i class="bar" style="background:' + tc(m.away) + '"></i></div><small class="ilv">● ' + esc(minuteLabel(m)) + '</small></div>';
+      case 'myteam': return myTeamHTML();
       case 'countdown': return '<div class="tx"><b>' + esc(timeLeft(s.date)) + '</b><small>' + esc(s.text || 'Falta para el inicio') + '</small></div>';
       case 'music': return (s.img ? '<img class="cv" alt="" src="' + esc(s.img) + '">' : '<span class="em">🎵</span>') + '<div class="tx"><b>' + esc(s.title || 'Canción') + '</b><small>' + esc(s.artist || '') + '</small></div>' + (s.audio ? '<button type="button" class="pp" data-isl-play="1">' + (playing ? '❚❚' : '▶') + '</button>' : '');
-      case 'photo': return (s.img ? '<img class="ph" alt="" src="' + esc(s.img) + '">' : '<span class="em">🖼️</span>') + (s.text ? '<div class="tx"><b>' + esc(s.text) + '</b></div>' : '');
+      case 'photo': return (s.img ? '<img class="iph" alt="" src="' + esc(s.img) + '">' : '<span class="em">🖼️</span>') + (s.text ? '<div class="tx"><b>' + esc(s.text) + '</b></div>' : '');
       case 'clock': return '<div class="tx"><b class="clk">' + p2(now.getHours()) + ':' + p2(now.getMinutes()) + '</b><small>' + esc(['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][now.getDay()]) + '</small></div>';
       case 'ticker': var tt = esc(s.text || 'Texto que se desliza'); return '<div class="mq"><div class="mqt" style="animation-duration:calc(' + Math.max(6, tt.length * .3).toFixed(1) + 's*var(--ik,1))"><span>' + tt + '</span><span>' + tt + '</span></div></div>';
     }
     return null;
   }
   function slides() { var out = []; (cfg.slides || []).forEach(function (s, i) { var h = slideHTML(s); if (h) out.push({ i: i, h: h, s: s }); }); return out; }
-  function content(h) { var c = el.querySelector('.c'); if (!c) return; c.innerHTML = h; c.classList.remove('in'); void c.offsetWidth; c.classList.add('in'); }
+  function fitWidth() {
+    if (!el || !cfg.fit) return; var c = el.querySelector('.c'); if (!c) return;
+    var old = c.getAttribute('style'); c.style.cssText = 'position:absolute;left:0;top:0;width:max-content;visibility:hidden;max-width:none;white-space:nowrap;opacity:0;transition:none';
+    var nat = c.offsetWidth; if (old === null) c.removeAttribute('style'); else c.setAttribute('style', old);
+    var base = popping ? (parseFloat(el.style.getPropertyValue('--iow')) || 0) : num(cfg.ow, 80, 420, 210);
+    el.style.setProperty('--iow', Math.max(base, Math.min(Math.ceil(nat) + 48, (w.innerWidth || 360) - 16)) + 'px');
+  }
+  function content(h) { var c = el.querySelector('.c'); if (!c) return; c.innerHTML = h; c.classList.remove('in'); void c.offsetWidth; c.classList.add('in'); fitWidth(); }
   function showSlide(n, keep) {
     var L1 = slides(); if (!L1.length) L1 = [{ h: slideHTML({ t: 'league' }), s: { t: 'league' } }];
     idx = ((n % L1.length) + L1.length) % L1.length;
     var c = el.querySelector('.c');
-    if (keep && c) c.innerHTML = L1[idx].h; else content(L1[idx].h);
+    if (keep && c) { c.innerHTML = L1[idx].h; fitWidth(); } else content(L1[idx].h);
   }
 
   /* ---------- estilos de la isla ---------- */
@@ -111,12 +152,12 @@
     '#lsl-island .tx{display:flex;flex-direction:column;gap:2px;min-width:0}' +
     '#lsl-island .tx b{font-size:1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '#lsl-island .tx small,#lsl-island .sm{font-size:.82em;font-weight:600;opacity:.72;overflow:hidden;text-overflow:ellipsis}' +
-    '#lsl-island .tx .lv{color:#ff5468;opacity:1}' +
+    '#lsl-island .tx .ilv{color:#ff5468;opacity:1}' +
     '#lsl-island .vs{display:flex;align-items:center;gap:6px}#lsl-island .vs em{font-style:normal;opacity:.6;font-size:.85em}' +
-    '#lsl-island .sc{font-size:1.25em;letter-spacing:1px}#lsl-island .td{width:8px;height:8px;border-radius:50%;flex:none}' +
+    '#lsl-island .isc{font-size:1.25em;letter-spacing:1px}#lsl-island .td{width:8px;height:8px;border-radius:50%;flex:none}' +
     '#lsl-island .em{font-size:1.5em;flex:none}#lsl-island .clk{font-size:1.3em;letter-spacing:1px}' +
-    '#lsl-island .cv,#lsl-island .ph{width:calc(var(--ioh) - 14px);height:calc(var(--ioh) - 14px);max-width:78px;max-height:78px;object-fit:cover;border-radius:10px;flex:none}' +
-    '#lsl-island .ph{border-radius:50%}' +
+    '#lsl-island .cv,#lsl-island .iph{width:calc(var(--ioh) - 14px);height:calc(var(--ioh) - 14px);max-width:78px;max-height:78px;object-fit:cover;border-radius:10px;flex:none}' +
+    '#lsl-island .iph{border-radius:50%}' +
     '#lsl-island .pp{display:flex;align-items:center;justify-content:center;padding:0;width:28px;height:28px;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:inherit;font-size:11px;cursor:pointer;flex:none}' +
     '#lsl-island .mq{overflow:hidden;max-width:100%}#lsl-island .mqt{display:inline-flex;animation:islx-mq 9s linear infinite}#lsl-island .mqt span{padding-right:2.5em;white-space:nowrap}' +
     '#lsl-island[data-tr=fade] .c.in{animation:islx-fade .35s ease}#lsl-island[data-tr=slide] .c.in{animation:islx-slide .35s ease}' +
@@ -131,6 +172,16 @@
     '@keyframes islx-breathe{50%{scale:1.06}}@keyframes islx-float{50%{translate:0 -3px}}' +
     '@keyframes islx-glow{50%{box-shadow:0 0 26px var(--igc,#fff),var(--ish)}}' +
     '@keyframes islx-wig{0%,78%,100%{rotate:0deg}84%{rotate:-5deg}90%{rotate:5deg}95%{rotate:-2deg}}' +
+    '#lsl-island .dt .lg{display:none}' +
+    '#lsl-island[data-dot=logo] .dt{width:20px;height:20px}#lsl-island[data-dot=logo] .dt b{display:none}' +
+    '#lsl-island[data-dot=logo] .dt .lg{display:block;width:20px;height:20px;border-radius:50%;object-fit:cover;animation:islx-spin calc(6s*var(--ik,1)) linear infinite}' +
+    '#lsl-island .itv{display:flex;align-items:center;gap:6px}#lsl-island .itv>span{font-weight:800}#lsl-island .itv .bar{width:4px;height:1.5em;border-radius:2px;flex:none}' +
+    '#lsl-island .itv>*{flex:none}#lsl-island .itv .isc{background:rgba(255,255,255,.16);padding:2px 8px;border-radius:7px;font-size:1.15em;letter-spacing:1px;white-space:nowrap}' +
+    '#lsl-island .c{position:relative;z-index:1}#lsl-island .dt{z-index:1}' +
+    '#lsl-island.goal:before{content:"";position:absolute;inset:0;background:var(--igc,#fff);opacity:0;animation:islx-gflash 1.1s ease-out}' +
+    '#lsl-island.goal{animation:islx-goal 1.2s ease-out}' +
+    '@keyframes islx-spin{to{transform:rotate(360deg)}}@keyframes islx-gflash{0%{opacity:.85}100%{opacity:0}}' +
+    '@keyframes islx-goal{0%{scale:1;box-shadow:0 0 0 0 var(--igc,#27C4C9)}16%{scale:1.1}100%{scale:1;box-shadow:0 0 0 24px transparent}}' +
     '@media(prefers-reduced-motion:reduce){#lsl-island,#lsl-island *{animation:none!important}}';
   var PCSS = '' +
     '.isp{position:fixed;left:0;right:0;bottom:0;z-index:2147482000;height:60vh;max-height:calc(100vh - 96px);display:flex;flex-direction:column;background:var(--bg2,#0f1b33);color:var(--tx,#fff);border-top:1px solid var(--line,rgba(255,255,255,.14));border-radius:20px 20px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.5);transition:transform .3s cubic-bezier(.3,.7,.2,1);font:500 14px/1.35 system-ui,-apple-system,sans-serif}' +
@@ -159,13 +210,14 @@
   function inject(id, css) { if (d.getElementById(id)) return; var s = d.createElement('style'); s.id = id; s.textContent = css; d.head.appendChild(s); }
 
   /* ---------- construir y aplicar ---------- */
+  function sizeVars() { if (!el) return; el.style.setProperty('--iow', num(cfg.ow, 80, 420, 210) + 'px'); el.style.setProperty('--ioh', num(cfg.oh, 24, 220, 46) + 'px'); }
   function build() {
     var old = d.getElementById('lsl-isl'); if (old && old.parentNode) old.parentNode.removeChild(old);   // isla vieja
     if (d.getElementById('lsl-island')) { el = d.getElementById('lsl-island'); return; }
     inject('lsl-island-css', CSS);
     el = d.createElement('div'); el.id = 'lsl-island'; el.className = 'noanim';
     el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Isla dinámica');
-    el.innerHTML = '<i class="dt"><b></b><b></b><b></b></i><div class="c"></div>';
+    el.innerHTML = '<i class="dt"><b></b><b></b><b></b><img class="lg" alt=""></i><div class="c"></div>';
     d.body.appendChild(el); bind();
   }
   function apply(c) {
@@ -173,7 +225,7 @@
     var sty = cfg.style, acc = accent(), sp = num(cfg.speed, 30, 300, 100) / 100;
     function set(k, v) { el.style.setProperty(k, v); }
     set('--iw', num(cfg.w, 30, 300, 104) + 'px'); set('--ih', num(cfg.h, 16, 90, 30) + 'px'); set('--ir', num(cfg.r, 0, 60, 20) + 'px');
-    set('--iow', num(cfg.ow, 80, 420, 210) + 'px'); set('--ioh', num(cfg.oh, 24, 220, 46) + 'px'); set('--ior', num(cfg.or, 0, 80, 26) + 'px');
+    if (!popping) sizeVars(); set('--ior', num(cfg.or, 0, 80, 26) + 'px');
     set('--ifs', num(cfg.fs, 9, 24, 12) + 'px'); set('--ifg', hex(cfg.fg, '#ffffff'));
     var bg = hex(cfg.bg, '#000000'), bg2 = cfg.bg2 ? hex(cfg.bg2, '') : '', bgc;
     if (cfg.theme) bgc = 'var(--grad,' + bg + ')';
@@ -198,9 +250,10 @@
     else { el.style.top = off + '%'; set('--itx', '0px'); set('--ity', '-50%'); }
     set('--irot', rot + 'deg');
     el.setAttribute('data-st', sty); el.setAttribute('data-idle', cfg.idle); el.setAttribute('data-tr', cfg.tr); el.setAttribute('data-pos', pos);
-    el.setAttribute('data-dot', playing ? 'bars' : cfg.dotk);
+    el.setAttribute('data-dot', dotKind());
+    var lg = el.querySelector('.lg'), lsrc = logoSrc(); if (lg && (lg.getAttribute('src') || '') !== lsrc) { if (lsrc) lg.src = lsrc; else lg.removeAttribute('src'); }
     el.style.display = (cfg.on || panel) ? '' : 'none';
-    showSlide(open ? idx : 0, true);
+    if (!popping) showSlide(open ? idx : 0, true);
     startAuto();
     if (el.classList.contains('noanim')) setTimeout(function () { el.classList.remove('noanim'); }, 60);
   }
@@ -209,9 +262,10 @@
   function armClose() { clearTimeout(tClose); var s = num(cfg.close_after, 0, 120, 3); if (s > 0) tClose = setTimeout(function () { setOpen(false); }, s * 1000); }
   function setOpen(v, skip) {
     open = v; el.classList.toggle('open', v); clearTimeout(tClose); clearInterval(tCycle); clearInterval(tTick);
-    if (v) {
-      if (!skip) showSlide(idx);
-      armClose();
+    if (!v) { popAct = null; popping = false; el.classList.remove('pop'); sizeVars(); return; }
+    if (!skip) showSlide(idx);
+    armClose();
+    if (!skip) {
       var cy = num(cfg.cycle, 0, 60, 0); if (cy > 0 && slides().length > 1) tCycle = setInterval(function () { showSlide(idx + 1); }, cy * 1000);
       tTick = setInterval(function () { if (open) showSlide(idx, true); }, 20000);
     }
@@ -221,11 +275,43 @@
     var n = num(cfg.auto_every, 0, 3600, 0); if (n === autoSet) return; autoSet = n; clearInterval(tAuto); if (!n) return;
     tAuto = setInterval(function () { if (open || panel) return; setOpen(true); clearTimeout(tClose); tClose = setTimeout(function () { setOpen(false); }, num(cfg.auto_for, 1, 60, 4) * 1000); }, n * 1000);
   }
-  function pop(slide) { var h = slideHTML(slide); if (!h) return; setOpen(true, true); content(h); clearTimeout(tClose); tClose = setTimeout(function () { setOpen(false); }, 5000); vib(); }
-  function liveSig() { return liveMatches().map(function (m) { return m.id + ':' + m.hs + '-' + m.as; }).join('|'); }
-  function checkGoals() { var sg = liveSig(); if (lastSig !== null && sg !== lastSig && sg && cfg.alert && !panel) pop({ t: 'live' }); lastSig = sg; }
+  function wide() {
+    var mw = Math.min(Math.max(num(cfg.ow, 80, 420, 210), 300), (w.innerWidth || 360) - 16);
+    el.style.setProperty('--iow', mw + 'px'); el.style.setProperty('--ioh', Math.max(num(cfg.oh, 24, 220, 46), 58) + 'px'); el.classList.add('pop'); popping = true;
+  }
+  function popHTML(h, ms, vp) { if (!h) return; setOpen(true, true); wide(); content(h); clearTimeout(tClose); tClose = setTimeout(function () { setOpen(false); }, ms); vib(vp); }
+  function pop(slide) { var h = slideHTML(slide); if (h) { popAct = null; popHTML(h, 5000); } }
+  function goalPop(m, side) {
+    popAct = { type: 'match', id: m.id }; popHTML(goalHTML(m, side), 6500, [30, 50, 30, 50, 90]);
+    el.classList.remove('goal'); void el.offsetWidth; el.classList.add('goal'); setTimeout(function () { el.classList.remove('goal'); }, 1300);
+  }
+  function newsPop(n) { popAct = { type: 'news', id: n.id }; popHTML('<span class="em">📰</span><div class="tx"><b>' + esc(n.title) + '</b><small>' + esc(n.cat || 'Noticia') + ' · tocá para leer</small></div>', 7000, [20, 40, 20]); }
+  function snapScores() { liveMatches().forEach(function (m) { scores[m.id] = [+m.hs || 0, +m.as || 0]; }); }
+  var NKEY = 'lsl:isl-newsseen';
+  function seenGet() { try { var a = JSON.parse(localStorage.getItem(NKEY)); return Array.isArray(a) ? a : null; } catch (e) { return null; } }
+  function seenSet(a) { try { localStorage.setItem(NKEY, JSON.stringify(a.slice(-60))); } catch (e) { } }
+  function checkNews(initial) {
+    var s = st(); if (!s || !Array.isArray(s.news)) return;
+    var ids = s.news.map(function (n) { return n.id; }), seen = seenGet();
+    if (seen === null) { seenSet(ids); return; }
+    var fresh = s.news.filter(function (n) { return seen.indexOf(n.id) < 0; }); if (!fresh.length) return;
+    seenSet(seen.concat(fresh.map(function (n) { return n.id; })));
+    if (cfg.alert_news && !panel && !L().adminOpen) { fresh.sort(function (a, b) { return new Date(b.date) - new Date(a.date); }); setTimeout(function () { newsPop(fresh[0]); }, initial ? 1500 : 0); }
+  }
+  function runPop(a) { try { var U = L().ui; if (U && U.openSheet) U.openSheet(a.type, a.id); } catch (e) { } }
+  function checkGoals() {
+    if (!st()) return; trackMinutes();
+    var found = null;
+    liveMatches().forEach(function (m) {
+      var o = scores[m.id], h = +m.hs || 0, a = +m.as || 0;
+      if (o && !found) { if (h > o[0]) found = [m, 'h']; else if (a > o[1]) found = [m, 'a']; }
+      scores[m.id] = [h, a];
+    });
+    if (found && cfg.alert && !panel && !L().adminOpen) goalPop(found[0], found[1]);
+  }
   function tapAction() {
     vib();
+    if (open && popAct) { var pa = popAct; setOpen(false); runPop(pa); return; }
     if (cfg.tap === 'go' && cfg.go) { try { w.location.hash = '#/' + cfg.go; } catch (e) { } if (open) setOpen(false); return; }
     if (cfg.tap === 'cycle' && open) { showSlide(idx + 1); armClose(); return; }
     setOpen(!open);
@@ -236,7 +322,7 @@
     if (audio.getAttribute('data-src') !== s.audio) { audio.src = s.audio; audio.setAttribute('data-src', s.audio); }
     if (audio.paused) { var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { playing = false; sync(); }); } else audio.pause();
   }
-  function sync() { el.setAttribute('data-dot', playing ? 'bars' : cfg.dotk); var b = el.querySelector('[data-isl-play]'); if (b) b.textContent = playing ? '❚❚' : '▶'; }
+  function sync() { el.setAttribute('data-dot', dotKind()); var b = el.querySelector('[data-isl-play]'); if (b) b.textContent = playing ? '❚❚' : '▶'; }
   function bind() {
     var down = false, moved = false, sx = 0, sy = 0, dx = 0, dy = 0;
     el.addEventListener('pointerdown', function (e) {
@@ -276,7 +362,7 @@
     ['Punto mini', { style: 'flat', bg: '#000000', bg2: '', theme: false, fg: '#ffffff', bc: '', bw: 0, glow: '', gi: 0, w: 28, h: 28, r: 14, ow: 170, oh: 40, or: 20, fs: 12, op: 100, pos: 'top', off: 50, gap: 10, rot: 0, aopen: 'snap', dotk: 'ping', idle: 'none' }, '#222222']
   ];
   var SF = {
-    league: [], next: [], live: [], clock: [],
+    league: [], next: [], live: [], clock: [], myteam: [],
     text: [['text', 'Texto', 'txt'], ['sub', 'Subtexto (opcional)', 'txt'], ['emo', 'Emoji (opcional)', 'txt']],
     countdown: [['text', 'Título', 'txt'], ['date', 'Fecha y hora', 'dt']],
     music: [['title', 'Canción', 'txt'], ['artist', 'Artista', 'txt'], ['img', 'Portada', 'img'], ['audio', 'Audio: link .mp3 (opcional, se toca con ▶)', 'txt']],
@@ -299,7 +385,7 @@
   function tabShape() {
     return '<h4>Cerrada</h4>' + rng('w', 'Ancho', 30, 300, 2, ' px') + rng('h', 'Alto', 16, 90, 1, ' px') + rng('r', 'Redondeo', 0, 60, 1, ' px') +
       '<h4>Abierta (al tocarla)</h4>' + rng('ow', 'Ancho', 80, 420, 2, ' px') + rng('oh', 'Alto', 24, 220, 1, ' px') + rng('or', 'Redondeo', 0, 80, 1, ' px') +
-      '<p class="isp-hint">Para que entren fotos o portadas grandes, subí el alto de la isla abierta.</p>';
+      chk('fit', 'Ensanchar sola cuando el contenido no entra') + '<p class="isp-hint">Para que entren fotos o portadas grandes, subí el alto de la isla abierta.</p>';
   }
   function tabPlace() {
     return chk('on', 'Mostrar la isla') + sel('pos', 'Borde de la pantalla', [['top', 'Arriba'], ['bottom', 'Abajo'], ['left', 'Izquierda'], ['right', 'Derecha']]) +
@@ -309,7 +395,8 @@
   function tabMotion() {
     return '<h4>Al abrir y cerrar</h4>' + sel('aopen', 'Animación', [['spring', 'Resorte (rebote suave)'], ['bounce', 'Rebote fuerte'], ['smooth', 'Suave'], ['snap', 'Rápida']]) + rng('speed', 'Velocidad', 30, 300, 10, ' %') +
       '<h4>Cuando está quieta</h4>' + sel('idle', 'Movimiento de la isla', [['none', 'Ninguno'], ['breathe', 'Respira'], ['float', 'Flota'], ['glow', 'Brilla'], ['wiggle', 'Se sacude de vez en cuando']]) +
-      sel('dotk', 'Indicador', [['pulse', 'Punto que late'], ['ping', 'Punto con onda'], ['bars', 'Barras (ecualizador)'], ['none', 'Sin indicador']]) +
+      sel('dotk', 'Indicador', [['pulse', 'Punto que late'], ['ping', 'Punto con onda'], ['bars', 'Barras (ecualizador)'], ['logo', 'Logo de la liga girando'], ['none', 'Sin indicador']]) +
+      '<p class="isp-hint">El logo gira solo si cargaste uno en la sección Liga; si no, queda el punto.</p>' +
       '<h4>Cambio de contenido</h4>' + sel('tr', 'Transición', [['fade', 'Desvanecer'], ['slide', 'Deslizar'], ['zoom', 'Zoom'], ['blur', 'Desenfoque']]);
   }
   function slideCard(s, i) {
@@ -333,7 +420,8 @@
       sel('go', 'Pantalla a la que va', [['home', 'Inicio'], ['matches', 'Partidos'], ['league', 'Liga'], ['news', 'Noticias']]);
     h += '<h4>Comportamiento</h4>' + rng('close_after', 'Cerrarse sola a los (0 = no se cierra)', 0, 30, 1, ' s') + rng('cycle', 'Cambiar de contenido cada (0 = no)', 0, 20, 1, ' s') +
       rng('auto_every', 'Abrirse sola cada (0 = nunca)', 0, 300, 5, ' s') + rng('auto_for', 'Mantenerse abierta (cuando se abre sola)', 1, 30, 1, ' s') +
-      chk('alert', 'Avisar cuando hay un gol (se abre sola con el resultado)') + chk('haptic', 'Vibrar al tocar') +
+      chk('alert', 'Avisar cuando hay un gol (destello y nombre del goleador)') + chk('alert_news', 'Avisar cuando se publica una noticia (tocá la isla para leerla)') + chk('haptic', 'Vibrar al tocar') +
+      '<h4>Probar avisos</h4><div class="isp-g"><button type="button" class="isb" data-pa="tgoal">⚽ Probar gol</button><button type="button" class="isb" data-pa="tnews">📰 Probar noticia</button></div>' +
       '<p class="isp-hint">Con la isla abierta, deslizá el dedo hacia los costados para cambiar de contenido.</p>';
     return h;
   }
@@ -403,6 +491,8 @@
     if (pa === 'close') { closePanel(); if (L().ui && L().ui.toast) L().ui.toast('Isla guardada'); return; }
     if (pa === 'min') { panel.classList.toggle('min'); b.textContent = panel.classList.contains('min') ? '▴' : '▾'; return; }
     if (pa === 'test') { setOpen(!open); return; }
+    if (pa === 'tgoal') { var sg = st(), mg = liveMatches()[0] || nextMatch() || (sg && sg.matches[0]); if (!mg) { if (L().ui && L().ui.toast) L().ui.toast('Cargá un partido para probar'); return; } goalPop(mg, 'h'); return; }
+    if (pa === 'tnews') { var sn = st(), nw = ((sn && sn.news) || []).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); })[0]; if (!nw) { if (L().ui && L().ui.toast) L().ui.toast('No hay noticias para probar'); return; } newsPop(nw); return; }
     if (pa === 'next') { if (!open) setOpen(true); else { showSlide(idx + 1); armClose(); } return; }
     if (pa === 'reset') { if (w.confirm && !w.confirm('¿Volver la isla a su diseño original?')) return; cfg = clone(DEF); live(); renderTab(); }
   }
@@ -428,14 +518,16 @@
   /* ---------- arranque ---------- */
   function fromState() { var s = st(); apply(s && s.design && s.design.isl); }
   function attach() {
-    L().island = ISL; fromState(); lastSig = liveSig();
-    S().on('change', function () { if (!panel) fromState(); checkGoals(); });
+    L().island = ISL; fromState(); trackMinutes(); snapScores(); checkNews(true);
+    S().on('change', function () { if (!panel) fromState(); checkGoals(); checkNews(); });
     hookAdmin();
   }
   function boot() {
     build(); apply(DEF);
     var n = 0, iv = setInterval(function () { if (st() && S().on) { clearInterval(iv); attach(); } else if (++n > 150) clearInterval(iv); }, 100);
   }
+  ISL._t = { minuteLabel: minuteLabel, minSeen: minSeen, goalPop: goalPop, newsPop: newsPop, myTeamHTML: myTeamHTML };
+  ISL.close = function () { if (el) setOpen(false); };
   ISL.apply = function (c) { apply(c); }; ISL.openPanel = openPanel; ISL.pop = pop; ISL.DEF = DEF;
   ISL._state = function () { return { cfg: cfg, open: open, idx: idx }; };
   w.LSL = w.LSL || {}; w.LSL.island = ISL;
