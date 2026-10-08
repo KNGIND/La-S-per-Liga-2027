@@ -216,18 +216,6 @@ window.__LSL_CODE_READY__.then(function (data) {
   }, loadOriginal);
 })();
 </script>
-<!-- Isla decorativa (estilo HyperOS): tocá = se expande un poco · deslizá hacia arriba/costado = se cierra -->
-<style>
-#lsl-isl{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;z-index:2147483000;width:104px;height:30px;margin-left:-52px;border-radius:20px;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.35);font:700 12px/1 system-ui,sans-serif;letter-spacing:.2px;transition:width .42s cubic-bezier(.34,1.45,.5,1),height .42s cubic-bezier(.34,1.45,.5,1),margin-left .42s cubic-bezier(.34,1.45,.5,1),border-radius .42s,transform .35s cubic-bezier(.3,.7,.2,1),opacity .3s;-webkit-tap-highlight-color:transparent}
-#lsl-isl.open{width:210px;height:46px;margin-left:-105px;border-radius:26px}
-#lsl-isl.drag{transition:none}
-#lsl-isl.gone{transform:translateY(-90px) scale(.7);opacity:0;pointer-events:none}
-#lsl-isl i{width:8px;height:8px;border-radius:50%;background:var(--accent,#27C4C9);flex:none;animation:lslp 1.8s ease-in-out infinite}
-#lsl-isl span{white-space:nowrap;opacity:0;max-width:0;transition:opacity .25s .08s,max-width .42s}
-#lsl-isl.open span{opacity:1;max-width:170px}
-@keyframes lslp{50%{transform:scale(.55);opacity:.6}}
-@media(prefers-reduced-motion:reduce){#lsl-isl,#lsl-isl i{transition:none;animation:none}}
-</style>
 <div id="lsl-isl" role="button" aria-label="Isla decorativa"><i></i><span id="lsl-isl-t">La Súper Liga</span></div>
 <script>
 (function(){
