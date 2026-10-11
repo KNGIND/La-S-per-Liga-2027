@@ -223,9 +223,9 @@
 
   /* ---------- render de pantallas ---------- */
   function render(anim) {
-    var html = UI.views[cur]();
+    var html = UI.views[cur](), tok = (anim && LSL.fx && LSL.fx.tabOut) ? LSL.fx.tabOut(view, cur) : null;   // fx.js: el contenido viejo sale mientras entra el nuevo
     view.innerHTML = html;
-    if (anim) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); }
+    if (anim) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); if (tok) LSL.fx.tabIn(tok, view); }
   }
   function go(tab, keepScroll, fromBack) {
     if (tab === 'more') tab = 'profile';

@@ -19,18 +19,43 @@
   function lite() { return root.getAttribute('data-perf') === 'lite'; }
   var reduced = !!(w.matchMedia && w.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  /* ---------- ajustes (se guardan en las preferencias del celular) ---------- */
+  /* ---------- ajustes: valores del admin (para todos) + elección de cada persona ---------- */
   var DEF = { tilt: true, confetti: true, flip: true, aurora: true, crest3d: true, glow: true, ripple: true, haptic: true, lists: true, slowpoll: true };
-  function cfg() { var p = L().prefs; return Object.assign({}, DEF, (p && p.fx) || {}); }
-  function setFx(k, v) {
+  var ADM_DEF = {
+    defaults: {}, userFx: true, userZoom: true, trans: 'morph', skel: 'shimmer', zoom: 100,
+    champ: { on: true, auto: true, liga: true, copas: true, title: '¡CAMPEÓN!', color: 'gold', confetti: true, secs: 8, ver: 1, manual: null }
+  };
+  var admDraft = null;                       // copia que se está editando en el panel de admin (se aplica en vivo)
+  function adminFx() {
+    if (admDraft) return admDraft;
+    var s0 = st(), a0 = (s0 && s0.design && s0.design.fx) || {};
+    return Object.assign({}, ADM_DEF, a0, { defaults: Object.assign({}, a0.defaults || {}), champ: Object.assign({}, ADM_DEF.champ, a0.champ || {}) });
+  }
+  function eff(k) {
+    var a1 = adminFx(), u = (L().prefs || {}).fx || {};
+    if (a1.userFx !== false && u[k] !== undefined) return !!u[k];       // lo que eligió la persona (si el admin lo permite)
+    if (a1.defaults && a1.defaults[k] !== undefined) return !!a1.defaults[k];   // lo que puso el admin para todos
+    return DEF[k];
+  }
+  function cfg() { var o = {}; Object.keys(DEF).forEach(function (k) { o[k] = eff(k); }); return o; }
+  function zoomEff() {
+    var a1 = adminFx(), u = (L().prefs || {}).fx || {};
+    var z = (a1.userZoom !== false && u.zoom != null) ? +u.zoom : +a1.zoom;
+    return Math.max(85, Math.min(115, z || 100));
+  }
+  function setFx(k, v) {                       // guarda solo lo que la persona cambió; null = volver al valor del admin
     var P = L().prefs; if (!P) return;
-    P.fx = Object.assign({}, DEF, P.fx || {}); P.fx[k] = v;
+    P.fx = Object.assign({}, P.fx || {}); if (v === null) delete P.fx[k]; else P.fx[k] = v;
     if (L().savePrefs) L().savePrefs();
     applyAttrs();
   }
   function applyAttrs() {
-    var c = cfg();
+    var c = cfg(), a1 = adminFx();
     Object.keys(DEF).forEach(function (k) { root.setAttribute('data-fx-' + k, c[k] ? '1' : '0'); });
+    root.setAttribute('data-fx-trans', a1.trans || 'morph');
+    root.setAttribute('data-fx-skel', a1.skel || 'shimmer');
+    var z = zoomEff(); root.style.setProperty('--fx-zoom', (z / 100).toFixed(2));
+    if (z !== 100) root.setAttribute('data-fx-zoomed', ''); else root.removeAttribute('data-fx-zoomed');
     syncTilt(); syncPoll();
   }
 
@@ -83,18 +108,68 @@
     '.fx-em{color:var(--mut,#9fb0cc);padding:10px 2px}' +
     '.fx-pv{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:10px 14px calc(20px + env(safe-area-inset-bottom,0px))}' +
     '.fx-pv img{max-width:100%;max-height:68vh;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.5)}.fx-pv .fx-act{width:100%;max-width:420px}' +
-    '.fx-pv p{margin:0;color:var(--mut,#9fb0cc);font-size:12.5px;text-align:center}';
+    '.fx-pv p{margin:0;color:var(--mut,#9fb0cc);font-size:12.5px;text-align:center}' +
+    /* texto ajustable */
+    'html[data-fx-zoomed] #view,html[data-fx-zoomed] #sbody{zoom:var(--fx-zoom)}' +
+    '#fx-sec .fx-zr{display:flex;gap:10px;align-items:center;padding:4px 0 10px}#fx-sec .fx-zr input{flex:1;accent-color:var(--ac,#27C4C9)}#fx-sec .fx-zr .fx-test{margin:0;width:auto;padding:8px 12px}' +
+    /* transición entre pantallas */
+    '.fx-ghost{position:fixed;top:0;z-index:5;overflow:hidden;pointer-events:none}' +
+    '@keyframes fx-gout-n{to{transform:translate3d(-36px,0,0);opacity:0}}@keyframes fx-gout-p{to{transform:translate3d(36px,0,0);opacity:0}}@keyframes fx-gout-f{to{opacity:0}}' +
+    '@keyframes fx-in-n{from{transform:translate3d(44px,0,0);opacity:0}}@keyframes fx-in-p{from{transform:translate3d(-44px,0,0);opacity:0}}@keyframes fx-in-f{from{opacity:0}}' +
+    '.fx-ghost[data-d=n]{animation:fx-gout-n .28s ease-in forwards}.fx-ghost[data-d=p]{animation:fx-gout-p .28s ease-in forwards}.fx-ghost[data-d=f]{animation:fx-gout-f .22s ease-in forwards}' +
+    F + '[data-fx-trans=morph] .view.enter[data-fxd=n],' + F + '[data-fx-trans=slide] .view.enter[data-fxd=n]{animation:fx-in-n .34s cubic-bezier(.2,.8,.3,1) both}' +
+    F + '[data-fx-trans=morph] .view.enter[data-fxd=p],' + F + '[data-fx-trans=slide] .view.enter[data-fxd=p]{animation:fx-in-p .34s cubic-bezier(.2,.8,.3,1) both}' +
+    F + '[data-fx-trans=fade] .view.enter[data-fxd]{animation:fx-in-f .26s ease-out both}' +
+    /* la tarjeta se convierte en el detalle del partido */
+    'html[data-fxm] #sheet .panel{transition:none!important;animation:fx-pin .38s cubic-bezier(.2,.8,.2,1) both}' +
+    '@keyframes fx-pin{0%{opacity:0;transform:scale(.96)}60%{opacity:1}100%{opacity:1;transform:none}}' +
+    /* esqueletos de imágenes */
+    'html[data-fx-skel=shimmer] img.fx-sk{background:linear-gradient(100deg,var(--card2,#1b2740) 30%,rgba(255,255,255,.14) 50%,var(--card2,#1b2740) 70%) 0 0/300% 100%;animation:fx-sh 1.3s linear infinite}' +
+    'html[data-fx-skel=static] img.fx-sk,html[data-fx-skel=shimmer][data-perf=lite] img.fx-sk{background:var(--card2,#1b2740)}' +
+    '@keyframes fx-sh{to{background-position:-300% 0}}' +
+    /* campeón */
+    '.fx-champ{position:fixed;inset:0;z-index:2147482700;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fff;cursor:pointer;background:radial-gradient(120% 90% at 50% 30%,color-mix(in srgb,var(--cc,#27C4C9) 55%,#04101F),#020812 70%);animation:fx-chin .4s ease-out both}' +
+    '@keyframes fx-chin{from{opacity:0}}' +
+    '.fx-champ svg.fx-tr{width:min(46vw,200px);height:auto;filter:drop-shadow(0 12px 28px rgba(0,0,0,.5));animation:fx-trin .9s cubic-bezier(.2,1.3,.4,1) both}' +
+    '@keyframes fx-trin{0%{transform:translateY(40px) scale(.3) rotate(-12deg);opacity:0}100%{transform:none;opacity:1}}' +
+    '.fx-champ .fx-cr{display:flex;align-items:center;justify-content:center;margin:16px 0 6px;width:84px;height:84px;border-radius:50%;object-fit:cover;font:800 28px system-ui,sans-serif;animation:fx-crin .7s .35s ease-out both}' +
+    '@keyframes fx-crin{from{transform:scale(.4);opacity:0}}' +
+    '.fx-champ small{letter-spacing:3px;font-weight:800;font-size:15px;opacity:.9;text-transform:uppercase}' +
+    '.fx-champ h2{margin:6px 0 4px;font:900 38px/1.05 system-ui,sans-serif;letter-spacing:.3px}' +
+    '.fx-champ b{font-size:22px}.fx-champ .fx-sub{margin-top:4px;opacity:.7;font-size:15px}.fx-champ em{margin-top:28px;font-style:normal;font-size:12.5px;opacity:.55}' +
+    /* panel de admin: Efectos y animaciones */
+    '.fxp{position:fixed;left:0;right:0;bottom:0;z-index:2147482000;height:62vh;max-height:calc(100vh - 96px);display:flex;flex-direction:column;background:var(--bg2,#0f1b33);color:var(--tx,#fff);border-top:1px solid var(--line,rgba(255,255,255,.14));border-radius:20px 20px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.5);transition:transform .3s cubic-bezier(.3,.7,.2,1);font:500 14px/1.35 system-ui,-apple-system,sans-serif}' +
+    '.fxp.min{transform:translateY(calc(100% - 58px))}' +
+    '.fxp-h{display:flex;align-items:center;gap:8px;padding:12px 14px 8px}.fxp-h b{flex:1;font-size:15px}' +
+    '.fxp-ib{display:flex;align-items:center;justify-content:center;padding:0;width:36px;height:36px;border-radius:50%;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--card,#16233f);color:inherit;font-size:15px;cursor:pointer}' +
+    '.fxp-t{display:flex;gap:6px;padding:0 12px 8px;overflow-x:auto;scrollbar-width:none}' +
+    '.fxp-t button{flex:none;padding:7px 13px;border-radius:999px;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--card,#16233f);color:inherit;font:600 13px system-ui;cursor:pointer}' +
+    '.fxp-t button.on{background:var(--ac,#27C4C9);color:var(--on-ac,#001018);border-color:transparent}' +
+    '.fxp-b{flex:1;overflow-y:auto;padding:4px 14px 18px;-webkit-overflow-scrolling:touch}' +
+    '.fxp h4{margin:16px 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--mut,#9fb0cc)}.fxp h4:first-child{margin-top:4px}' +
+    '.fxa-r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line,rgba(255,255,255,.1))}.fxa-r>span{flex:1}.fxa-r small{display:block;color:var(--mut,#9fb0cc);font-size:11.5px;margin-top:2px}' +
+    '.fxa-r input{-webkit-appearance:none;appearance:none;width:44px;height:26px;border-radius:13px;background:var(--card2,#2a3550);position:relative;flex:none;margin:0;transition:background .2s}' +
+    '.fxa-r input:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s}' +
+    '.fxa-r input:checked{background:var(--ac,#27C4C9)}.fxa-r input:checked:after{transform:translateX(18px)}' +
+    '.fxa-f{display:block;margin:12px 0}.fxa-f>span{display:block;font-size:12.5px;color:var(--mut,#9fb0cc);margin-bottom:6px}' +
+    '.fxa-f select,.fxa-f input[type=text]{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--card,#16233f);color:inherit;font:inherit}' +
+    '.fxa-f input[type=range]{width:100%;accent-color:var(--ac,#27C4C9)}' +
+    '.fxa-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}' +
+    '.fxa-b{padding:10px 12px;border-radius:12px;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--card,#16233f);color:inherit;font:600 13px system-ui;cursor:pointer}.fxa-b.pri{background:var(--ac,#27C4C9);color:var(--on-ac,#001018);border-color:transparent}.fxa-b.dng{color:#ff6b7d}' +
+    '.fxa-hint{font-size:12px;color:var(--mut,#9fb0cc);margin:6px 0 10px}' +
+    '.fxp-f{display:flex;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line,rgba(255,255,255,.14))}.fxp-f .fxa-b{flex:1}';
   function injectCSS() { if (d.getElementById('lsl-fx-css')) return; var s = d.createElement('style'); s.id = 'lsl-fx-css'; s.textContent = CSS; d.head.appendChild(s); }
 
   /* ---------- confeti ---------- */
-  function confetti(colors) {
-    if (!cfg().confetti || lite() || reduced) return;
-    var old = d.getElementById('fx-cf'); if (old) old.remove();
+  function confetti(colors, opt) {
+    opt = opt || {};
+    if ((!opt.force && !cfg().confetti) || lite() || reduced) return;
+    var old = d.getElementById('fx-cf'); if (old && !opt.keep) { old.remove(); old = null; }
     var c = d.createElement('canvas'), W = c.width = w.innerWidth, H = c.height = w.innerHeight;
-    c.id = 'fx-cf'; c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2147482500';
+    if (!old) c.id = 'fx-cf'; c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:' + (opt.force ? 2147482800 : 2147482500);
     d.body.appendChild(c);
     var g = c.getContext('2d'), P = [], cols = colors && colors.length ? colors : ['#27C4C9', '#FFD226', '#ffffff', '#ff5468'];
-    for (var i = 0; i < 110; i++) P.push({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .28, vx: (Math.random() - .5) * 11, vy: -Math.random() * 13 - 3, r: Math.random() * 6 + 3, a: Math.random() * 6, va: (Math.random() - .5) * .4, c: cols[i % cols.length], s: i % 3 });
+    for (var i = 0; i < (opt.n || 110); i++) P.push({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .28, vx: (Math.random() - .5) * 11, vy: -Math.random() * 13 - 3, r: Math.random() * 6 + 3, a: Math.random() * 6, va: (Math.random() - .5) * .4, c: cols[i % cols.length], s: i % 3 });
     var t0 = 0, last = 0;
     (function step(t) {
       if (!t0) { t0 = t; last = t; }
@@ -153,6 +228,7 @@
   /* ---------- brillo, ondas y vibración (un solo oyente) ---------- */
   var HOSTS = '.btn,.mc,.hero,.dr-l button,.seg button,#nav button';
   d.addEventListener('pointerdown', function (e) {
+    var cardEl = e.target && e.target.closest && e.target.closest('[data-match],[data-news]'); if (cardEl) { lastCard = cardEl; lastCardAt = Date.now(); }
     var t = e.target && e.target.closest && e.target.closest(HOSTS); if (!t) return;
     var c = cfg();
     if (lite()) { if (c.haptic) { try { navigator.vibrate && navigator.vibrate(6); } catch (_) { } } return; }
@@ -218,18 +294,34 @@
     ['slowpoll', 'Actualizar menos seguido', 'Solo Ligero: ahorra batería y datos']
   ];
   function sectionHTML() {
-    var c = cfg();
-    return '<section class="dr-c" id="fx-sec"><h3>Efectos</h3><p class="mut sm">' + (lite() ? 'Estás en modo Ligero: los efectos visuales están apagados y se usan las optimizaciones.' : 'Elegí qué efectos querés ver. Las opciones "Solo Ligero" se usan únicamente en modo Ligero.') + '</p>' +
-      ROWS.map(function (r) { return '<label class="fx-r"><span>' + r[1] + '<small>' + r[2] + '</small></span><input type="checkbox" data-fx-t="' + r[0] + '"' + (c[r[0]] ? ' checked' : '') + '></label>'; }).join('') +
-      (lite() ? '' : '<button type="button" class="fx-test" data-fx-demo>🎉 Probar confeti</button>') + '</section>';
+    var a1 = adminFx(), c = cfg(), showFx = a1.userFx !== false, showZ = a1.userZoom !== false;
+    if (!showFx && !showZ) return '';
+    var h = '<section class="dr-c" id="fx-sec" data-sig="' + sig() + '"><h3>Efectos</h3>';
+    if (showZ) {
+      var z = zoomEff();
+      h += '<div class="fx-r" style="border-top:0"><span>Tamaño del texto <b data-fx-zv>' + z + '%</b><small>Agranda o achica el contenido de las pantallas</small></span></div>' +
+        '<div class="fx-zr"><input type="range" min="85" max="115" step="5" value="' + z + '" data-fx-zoom aria-label="Tamaño del texto"><button type="button" class="fx-test" data-fx-zreset>Restablecer</button></div>';
+    }
+    if (showFx) {
+      h += '<p class="mut sm">' + (lite() ? 'Estás en modo Ligero: los efectos visuales están apagados y se usan las optimizaciones.' : 'Elegí qué efectos querés ver. Las opciones "Solo Ligero" se usan únicamente en modo Ligero.') + '</p>' +
+        ROWS.map(function (r) { return '<label class="fx-r"><span>' + r[1] + '<small>' + r[2] + '</small></span><input type="checkbox" data-fx-t="' + r[0] + '"' + (c[r[0]] ? ' checked' : '') + '></label>'; }).join('') +
+        (lite() ? '' : '<button type="button" class="fx-test" data-fx-demo>🎉 Probar confeti</button>');
+    }
+    return h + '</section>';
   }
+  function sig() { var a1 = adminFx(); return (a1.userFx !== false ? 1 : 0) + ':' + (a1.userZoom !== false ? 1 : 0) + ':' + (lite() ? 'l' : 'f'); }
   function injectDrawer() {
     var dr = d.getElementById('drawer'); if (!dr) return;
-    var perf = dr.querySelector('#dr-perf');
-    if (perf && !dr.querySelector('#fx-sec')) perf.insertAdjacentHTML('afterend', sectionHTML());
+    var perf = dr.querySelector('#dr-perf'), cur = dr.querySelector('#fx-sec');
+    if (cur && cur.getAttribute('data-sig') !== sig()) { cur.remove(); cur = null; }
+    if (perf && !cur) { var html = sectionHTML(); if (html) perf.insertAdjacentHTML('afterend', html); }
     var nav = dr.querySelector('.dr-l');
     if (nav && !nav.querySelector('[data-fx-stats]')) nav.insertAdjacentHTML('afterbegin', '<button type="button" data-fx-stats>' + ((L().ui && L().ui.ic) ? L().ui.ic('trophy') : '') + 'Estadísticas</button>');
   }
+  d.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-fx-zoom')) return;
+    setFx('zoom', +t.value); var lb = d.querySelector('[data-fx-zv]'); if (lb) lb.textContent = zoomEff() + '%';
+  });
   d.addEventListener('change', function (e) {
     var k = e.target && e.target.getAttribute && e.target.getAttribute('data-fx-t'); if (!k) return;
     setFx(k, e.target.checked); if (k === 'tilt' && e.target.checked) askOrientation();
@@ -237,6 +329,7 @@
   d.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target : null; if (!t) return;
     if (t.closest('[data-fx-demo]')) { confetti(); return; }
+    if (t.closest('[data-fx-zreset]')) { setFx('zoom', null); var old = d.getElementById('fx-sec'); if (old) old.remove(); schedule(); return; }
     if (t.closest('[data-fx-stats]')) { var x = d.querySelector('#drawer [data-dr-close]'); if (x) x.click(); openStats(); return; }
     var sh = t.closest('[data-fx-share]'); if (sh) { shareMatch(sh.getAttribute('data-fx-share')); return; }
     var cal = t.closest('[data-fx-cal]'); if (cal) { addToCalendar(cal.getAttribute('data-fx-cal')); return; }
@@ -371,9 +464,258 @@
     row.insertAdjacentHTML('afterend', html);
   }
 
+  /* ---------- transiciones entre pantallas y del detalle del partido ---------- */
+  var lastTab = null, lastCard = null, lastCardAt = 0, ORDER = ['home', 'league', 'matches', 'news', 'profile'];
+  function transMode() { return (lite() || reduced) ? 'off' : (adminFx().trans || 'morph'); }
+  // app.js llama a tabOut ANTES de cambiar el contenido y a tabIn DESPUÉS: así el contenido viejo sale mientras entra el nuevo
+  FX.tabOut = function (view, tab) {
+    var prev = lastTab; lastTab = tab; var T = transMode();
+    if (T === 'off' || !prev || prev === tab || !view) return null;
+    var r = view.getBoundingClientRect(), g = d.createElement('div'), c = view.cloneNode(true);
+    c.removeAttribute('id'); c.classList.remove('enter');
+    c.style.cssText = 'position:absolute;left:0;top:' + r.top + 'px;width:' + r.width + 'px;margin:0';
+    g.className = 'fx-ghost'; g.setAttribute('aria-hidden', 'true');
+    g.style.cssText = 'left:' + r.left + 'px;width:' + r.width + 'px;height:' + (w.innerHeight || 800) + 'px';
+    var dir = T === 'fade' ? 'f' : (ORDER.indexOf(tab) >= ORDER.indexOf(prev) ? 'n' : 'p');
+    g.setAttribute('data-d', dir); g.appendChild(c); d.body.appendChild(g);
+    return { g: g, dir: dir };
+  };
+  FX.tabIn = function (tok, view) {
+    if (!tok) return;
+    view.setAttribute('data-fxd', tok.dir);
+    setTimeout(function () { if (tok.g.parentNode) tok.g.parentNode.removeChild(tok.g); view.removeAttribute('data-fxd'); }, 520);
+  };
+  // La tarjeta tocada se expande hasta convertirse en el detalle (solo en modo "Morphing")
+  function wrapSheet() {
+    var UI = L().ui; if (!UI || !UI.openSheet || UI.openSheet.__fx) return;
+    var orig = UI.openSheet;
+    var fn = function () {
+      var src = lastCard, ok = transMode() === 'morph' && src && (Date.now() - lastCardAt) < 1500 && d.body.contains(src);
+      lastCard = null;
+      if (!ok) return orig.apply(UI, arguments);
+      var r = src.getBoundingClientRect(); if (r.width < 20 || r.height < 20) return orig.apply(UI, arguments);
+      var ghost = src.cloneNode(true);
+      ghost.querySelectorAll('.fx-gl,.fx-rp,.fx-fl').forEach(function (n) { n.remove(); });
+      ghost.removeAttribute('id'); ghost.setAttribute('data-fxg', '1');
+      root.setAttribute('data-fxm', '');
+      var ret = orig.apply(UI, arguments);
+      var panel = d.querySelector('#sheet .panel'), pr = panel ? panel.getBoundingClientRect() : null;
+      if (!pr || !pr.width) { root.removeAttribute('data-fxm'); return ret; }
+      ghost.style.cssText = 'position:fixed;margin:0;z-index:2147482400;pointer-events:none;transform-origin:0 0;overflow:hidden;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
+      d.body.appendChild(ghost);
+      var tx = pr.left - r.left, ty = pr.top - r.top, sx = pr.width / r.width, sy = pr.height / r.height;
+      var done = function () { if (ghost.parentNode) ghost.parentNode.removeChild(ghost); root.removeAttribute('data-fxm'); };
+      if (ghost.animate) {
+        var an = ghost.animate([
+          { transform: 'translate(0,0) scale(1,1)', opacity: 1 },
+          { opacity: .85, offset: .5 },
+          { transform: 'translate(' + tx + 'px,' + ty + 'px) scale(' + sx + ',' + sy + ')', opacity: 0 }
+        ], { duration: 400, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+        an.onfinish = done;
+      }
+      setTimeout(done, 700);
+      return ret;
+    };
+    fn.__fx = true; UI.openSheet = fn;
+  }
+
+  /* ---------- esqueletos: marcador de posición de las imágenes mientras cargan ---------- */
+  function scanSkel() {
+    if ((adminFx().skel || 'shimmer') === 'off') return;
+    d.querySelectorAll('img').forEach(function (im) {
+      if (im.complete || im.classList.contains('fx-sk') || im.closest('#fx-share,#fx-champ')) return;
+      im.classList.add('fx-sk');
+      var rm = function () { im.classList.remove('fx-sk'); im.removeEventListener('load', rm); im.removeEventListener('error', rm); };
+      im.addEventListener('load', rm); im.addEventListener('error', rm);
+    });
+  }
+
+  /* ---------- campeón: trofeo y confeti al terminar la liga o una copa (o cuando lo corona el admin) ---------- */
+  var CK = 'lsl:fx-champ';
+  function chGet() { try { var a = JSON.parse(localStorage.getItem(CK)); return Array.isArray(a) ? a : null; } catch (e) { return null; } }
+  function chSet(a) { try { localStorage.setItem(CK, JSON.stringify(a.slice(-60))); } catch (e) { } }
+  function parseSc(x) { var m = /(\d+)\s*[-–:]\s*(\d+)/.exec(String(x || '')); return m ? [+m[1], +m[2]] : null; }
+  function tieWinner(legs) {                  // misma regla que la llave de copas de la app: global, ida en texto y penales
+    legs = legs.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    var A = legs[0].home, B = legs[0].away, ga = 0, gb = 0, done = true;
+    legs.forEach(function (m) {
+      if (m.status !== 'finished') done = false;
+      if (m.status === 'upcoming') return;
+      var hs = +m.hs || 0, as = +m.as || 0;
+      if (m.home === A) { ga += hs; gb += as; } else { ga += as; gb += hs; }
+    });
+    var f = legs.length === 1 && legs[0].leg2 ? parseSc(legs[0].firstLeg) : null; if (f) { ga += f[1]; gb += f[0]; }
+    if (!done) return null;
+    var last = legs[legs.length - 1], pn = parseSc(last.pens), pa = null, pb = null;
+    if (pn) { pa = last.home === A ? pn[0] : pn[1]; pb = last.home === A ? pn[1] : pn[0]; }
+    return ga > gb ? A : gb > ga ? B : (pn ? (pa > pb ? A : pb > pa ? B : null) : null);
+  }
+  function champions() {
+    var s0 = st(), out = [], ms = (s0 && s0.matches) || [], season = (s0 && s0.league && s0.league.season) || '', cp = adminFx().champ, v = '#v' + (+cp.ver || 1);
+    if (cp.liga) {
+      var ls = ms.filter(function (m) { return m.comp === 'liga'; });
+      if (ls.length && ls.every(function (m) { return m.status === 'finished'; })) {
+        var row = S().standings()[0]; if (row) out.push({ key: 'liga:' + season + ':' + row.id + v, team: row.id, title: 'Campeón de la liga', sub: season });
+      }
+    }
+    if (cp.copas) {
+      var names = {}; ms.forEach(function (m) { if (m.comp === 'copa') names[m.cup || 'Copa'] = 1; });
+      Object.keys(names).forEach(function (n) {
+        var fin = ms.filter(function (m) { return m.comp === 'copa' && (m.cup || 'Copa') === n && /\bfinal\b/i.test(m.round || '') && !/semi|cuartos|octavos|dieciseis|treintaidos|1\/\d/i.test(m.round || ''); });
+        if (!fin.length) return;
+        var pairs = {}; fin.forEach(function (m) { var k = [m.home, m.away].sort().join('|'); (pairs[k] = pairs[k] || []).push(m); });
+        var last = Object.keys(pairs).map(function (k) { return pairs[k]; }).sort(function (x, y) { return new Date(y[0].date) - new Date(x[0].date); })[0];
+        var win = tieWinner(last); if (win) out.push({ key: 'copa:' + n + ':' + season + ':' + win + v, team: win, title: 'Campeón de ' + n, sub: season });
+      });
+    }
+    var man = cp.manual; if (man && man.team) out.push({ key: 'manual:' + man.id + v, team: man.team, title: man.title || 'Campeón', sub: '', manual: true });
+    return out;
+  }
+  function checkChamp() {
+    if (!st() || !L().prefs) return;
+    var cp = adminFx().champ, list = champions(), seen = chGet();
+    if (seen === null) { chSet(list.map(function (x) { return x.key; })); return; }      // primera vez en este celular: no repite lo viejo
+    var fresh = list.filter(function (x) { return seen.indexOf(x.key) < 0; }); if (!fresh.length) return;
+    if (L().adminOpen) return;                                                           // si el admin está editando, se muestra después
+    chSet(seen.concat(fresh.map(function (x) { return x.key; })));
+    if (!cp.on) return;
+    var pick = fresh.filter(function (x) { return x.manual; })[0] || fresh[fresh.length - 1];
+    if (!cp.auto && !pick.manual) return;
+    showChamp(pick);
+  }
+  function trophySVG(p) {
+    return '<svg class="fx-tr" viewBox="0 0 120 140" aria-hidden="true"><defs><linearGradient id="fxtg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + p[0] + '"/><stop offset="1" stop-color="' + p[1] + '"/></linearGradient></defs>' +
+      '<path d="M30 14h60v32c0 22-14 38-30 42-16-4-30-20-30-42z" fill="url(#fxtg)"/>' +
+      '<path d="M30 22H12c0 22 10 36 26 40M90 22h18c0 22-10 36-26 40" fill="none" stroke="url(#fxtg)" stroke-width="8" stroke-linecap="round"/>' +
+      '<rect x="52" y="88" width="16" height="22" rx="3" fill="url(#fxtg)"/><rect x="34" y="110" width="52" height="14" rx="5" fill="url(#fxtg)"/>' +
+      '<path d="M44 26c0 14 4 26 12 34" stroke="rgba(255,255,255,.55)" stroke-width="5" fill="none" stroke-linecap="round"/></svg>';
+  }
+  function showChamp(info) {
+    var t = team(info.team); if (!t) return;
+    var cp = adminFx().champ, col = hex(t.color, '#27C4C9'), old = d.getElementById('fx-champ'); if (old) old.remove();
+    var pair = cp.color === 'silver' ? ['#F4F7FB', '#9AA7B8'] : cp.color === 'team' ? ['#ffffff', col] : ['#FFE27A', '#E0A100'];
+    var crest = t.logo ? '<img class="fx-cr" alt="" src="' + esc(t.logo) + '">' : '<span class="fx-cr" style="background:linear-gradient(135deg,' + col + ',' + rgba(col, .6) + ')">' + esc((t.short || t.name).slice(0, 3).toUpperCase()) + '</span>';
+    var o = d.createElement('div'); o.id = 'fx-champ'; o.className = 'fx-champ'; o.style.setProperty('--cc', col);
+    o.innerHTML = trophySVG(pair) + crest + '<small>' + esc(cp.title || '¡CAMPEÓN!') + '</small><h2>' + esc(t.name) + '</h2><b>' + esc(info.title || 'Campeón') + '</b>' + (info.sub ? '<span class="fx-sub">' + esc(info.sub) + '</span>' : '') + '<em>Tocá para cerrar</em>';
+    d.body.appendChild(o);
+    var tm = 0, closed = false;
+    function close() { if (closed) return; closed = true; clearTimeout(tm); if (o.parentNode) o.parentNode.removeChild(o); }
+    o.addEventListener('click', close);
+    if (+cp.secs > 0) tm = setTimeout(close, +cp.secs * 1000);
+    if (L().pushLayer) L().pushLayer(close);
+    if (cp.confetti) {
+      var cols = [col, '#ffffff', pair[1]];
+      confetti(cols, { force: true, n: 150 }); setTimeout(function () { confetti(cols, { force: true, keep: true, n: 110 }); }, 700); setTimeout(function () { confetti(cols, { force: true, keep: true, n: 90 }); }, 1500);
+    }
+    try { if (cfg().haptic && navigator.vibrate) navigator.vibrate([40, 60, 40, 60, 120]); } catch (_) { }
+  }
+
+  /* ================= PANEL DE ADMIN: Efectos y animaciones ================= */
+  var admPanel = null, admTab = 'fx', admT = 0;
+  var ATABS = [['fx', 'Efectos'], ['trans', 'Transiciones'], ['champ', 'Campeón'], ['text', 'Texto']];
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function aGet(p) { return p.split('.').reduce(function (o, k) { return o == null ? o : o[k]; }, admDraft); }
+  function aSetV(p, v) { var ks = p.split('.'), o = admDraft; for (var i = 0; i < ks.length - 1; i++) { o[ks[i]] = o[ks[i]] || {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = v; }
+  function admCommit(now) {
+    clearTimeout(admT);
+    function run() { var s1 = S(); if (!s1 || !s1.commit || !admDraft) return; var snap = clone(admDraft); s1.commit(function (state) { state.design = state.design || {}; state.design.fx = snap; }); }
+    if (now) run(); else admT = setTimeout(run, 350);
+  }
+  function aChk(p, l, h) { var v = aGet(p); if (v === undefined && /^defaults\./.test(p)) v = DEF[p.slice(9)]; return '<label class="fxa-r"><span>' + l + (h ? '<small>' + h + '</small>' : '') + '</span><input type="checkbox" data-ap="' + p + '"' + (v ? ' checked' : '') + '></label>'; }
+  function aRng(p, l, a, b, s1, u) { var v = aGet(p); return '<label class="fxa-f"><span>' + l + ': <b data-av="' + p + '">' + v + '</b>' + (u || '') + '</span><input type="range" data-ap="' + p + '" min="' + a + '" max="' + b + '" step="' + (s1 || 1) + '" value="' + v + '"></label>'; }
+  function aSel(p, l, o) { var v = aGet(p); return '<label class="fxa-f"><span>' + l + '</span><select data-ap="' + p + '">' + o.map(function (x) { return '<option value="' + x[0] + '"' + (String(v) === String(x[0]) ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>'; }
+  function aTxt(p, l, ph) { return '<label class="fxa-f"><span>' + l + '</span><input type="text" data-ap="' + p + '" placeholder="' + esc(ph || '') + '" value="' + esc(aGet(p) || '') + '"></label>'; }
+  function tabFx() {
+    var h = '<p class="fxa-hint">Lo que elijas acá es el valor por defecto para todos. Cada persona puede cambiarlo desde su menú ☰, salvo que lo bloquees.</p>' +
+      aChk('userFx', 'Permitir que cada persona elija sus efectos', 'Muestra la sección Efectos en el menú ☰') + '<h4>Por defecto para todos</h4>';
+    ROWS.forEach(function (r) { h += aChk('defaults.' + r[0], r[1], r[2]); });
+    return h;
+  }
+  function tabTrans() {
+    return '<h4>Entre pantallas</h4>' + aSel('trans', 'Animación', [['morph', 'Morphing: las pantallas se deslizan y la tarjeta se abre en el detalle'], ['slide', 'Solo deslizar las pantallas'], ['fade', 'Solo desvanecer'], ['off', 'Sin animación']]) +
+      '<p class="fxa-hint">Solo se ve en modo Alto. Para verlo, cerrá el panel de admin y cambiá de pestaña o abrí un partido.</p>' +
+      '<h4>Mientras cargan las imágenes</h4>' + aSel('skel', 'Marcador de posición', [['shimmer', 'Brillo animado (en Ligero queda fijo)'], ['static', 'Fijo'], ['off', 'Ninguno']]);
+  }
+  function tabChamp() {
+    var teams = (st() && st().teams) || [];
+    return aChk('champ.on', 'Mostrar la animación de campeón') +
+      aChk('champ.auto', 'Detectar sola cuándo termina', 'Liga: cuando todos sus partidos están terminados. Copa: cuando la final ya tiene ganador.') +
+      aChk('champ.liga', 'Incluir la liga') + aChk('champ.copas', 'Incluir las copas') +
+      aTxt('champ.title', 'Texto grande', '¡CAMPEÓN!') +
+      aSel('champ.color', 'Color del trofeo', [['gold', 'Dorado'], ['silver', 'Plateado'], ['team', 'Color del equipo']]) +
+      aChk('champ.confetti', 'Confeti') + aRng('champ.secs', 'Se cierra sola a los (0 = solo al tocar)', 0, 30, 1, ' s') +
+      '<h4>Coronar a mano</h4><label class="fxa-f"><span>Equipo campeón</span><select data-mt>' + teams.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="fxa-f"><span>Título (opcional)</span><input type="text" data-mtx placeholder="Ej: Campeón de la Copa Súper"></label>' +
+      '<div class="fxa-g"><button type="button" class="fxa-b pri" data-aa="crown">👑 Coronar y avisar</button><button type="button" class="fxa-b" data-aa="prev">▶ Probar acá</button></div>' +
+      '<p class="fxa-hint">Todos ven la celebración una sola vez, la próxima vez que abran la app.</p>' +
+      '<button type="button" class="fxa-b" data-aa="again">Volver a mostrar a todos…</button>';
+  }
+  function tabText() {
+    return aRng('zoom', 'Tamaño del texto por defecto', 85, 115, 5, ' %') + aChk('userZoom', 'Permitir que cada persona lo cambie', 'Aparece un control en el menú ☰') +
+      '<p class="fxa-hint">Agranda o achica el contenido de las pantallas y del detalle de los partidos.</p>';
+  }
+  var ATAB_FN = { fx: tabFx, trans: tabTrans, champ: tabChamp, text: tabText };
+  function admRender(keep) {
+    var b = admPanel.querySelector('.fxp-b'), top = b.scrollTop; b.innerHTML = ATAB_FN[admTab]();
+    admPanel.querySelectorAll('.fxp-t button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-at') === admTab); });
+    if (keep) b.scrollTop = top;
+  }
+  function openAdmin() {
+    if (admPanel) return;
+    admDraft = clone(adminFx());
+    admPanel = d.createElement('div'); admPanel.className = 'fxp';
+    admPanel.innerHTML = '<div class="fxp-h"><b>Efectos y animaciones</b><button type="button" class="fxp-ib" data-ad="min" aria-label="Achicar panel">▾</button><button type="button" class="fxp-ib" data-ad="close" aria-label="Cerrar">✕</button></div>' +
+      '<div class="fxp-t">' + ATABS.map(function (x) { return '<button type="button" data-at="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div><div class="fxp-b"></div>' +
+      '<div class="fxp-f"><button type="button" class="fxa-b dng" data-ad="reset">Restablecer todo</button></div>';
+    d.body.appendChild(admPanel); admRender();
+    admPanel.addEventListener('input', onAdmInput); admPanel.addEventListener('change', onAdmChange); admPanel.addEventListener('click', onAdmClick);
+    if (L().pushLayer) L().pushLayer(closeAdmin);
+  }
+  function closeAdmin() {
+    if (!admPanel) return;
+    admCommit(true); admPanel.parentNode.removeChild(admPanel); admPanel = null; admDraft = null; applyAttrs();
+  }
+  function admApply(t) {
+    var p = t.getAttribute('data-ap'); if (!p) return false;
+    var v = t.type === 'checkbox' ? t.checked : (t.type === 'range' ? +t.value : t.value);
+    aSetV(p, v); var lb = admPanel.querySelector('[data-av="' + p + '"]'); if (lb) lb.textContent = v;
+    applyAttrs(); admCommit(); return true;
+  }
+  function onAdmInput(e) { var t = e.target; if (t.type === 'range' || t.type === 'text') admApply(t); }
+  function onAdmChange(e) { var t = e.target; if (t.type === 'checkbox' || t.tagName === 'SELECT') admApply(t); }
+  function toast(m) { if (L().ui && L().ui.toast) L().ui.toast(m); }
+  function onAdmClick(e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var at = b.getAttribute('data-at'), ad = b.getAttribute('data-ad'), aa = b.getAttribute('data-aa');
+    if (at) { admTab = at; admRender(); return; }
+    if (ad === 'close') { closeAdmin(); toast('Efectos guardados'); return; }
+    if (ad === 'min') { admPanel.classList.toggle('min'); b.textContent = admPanel.classList.contains('min') ? '▴' : '▾'; return; }
+    if (ad === 'reset') { if (w.confirm && !w.confirm('¿Volver todos los efectos y animaciones a su configuración original?')) return; admDraft = clone(ADM_DEF); applyAttrs(); admCommit(true); admRender(); return; }
+    if (aa) {
+      var tm = admPanel.querySelector('[data-mt]'), tx = admPanel.querySelector('[data-mtx]');
+      if (aa === 'crown') { if (!tm || !tm.value) return toast('Elegí un equipo'); admDraft.champ.manual = { id: Date.now(), team: tm.value, title: (tx && tx.value.trim()) || '' }; admCommit(true); toast('Listo: todos verán la celebración al abrir la app'); return; }
+      if (aa === 'prev') { if (!tm || !tm.value) return; showChamp({ team: tm.value, title: (tx && tx.value.trim()) || 'Campeón', sub: '' }); return; }
+      if (aa === 'again') { if (w.confirm && !w.confirm('Todos van a volver a ver las celebraciones. ¿Seguro?')) return; admDraft.champ.ver = (+admDraft.champ.ver || 1) + 1; admCommit(true); toast('Se volverá a mostrar a todos'); return; }
+    }
+  }
+  function injectAdminCard() {
+    var m = d.querySelector('#admin-root .adm-menu'); if (!m || m.querySelector('[data-fx-adm]')) return;
+    var b = d.createElement('button'); b.type = 'button'; b.className = 'am-card c4'; b.setAttribute('data-fx-adm', '1');
+    b.innerHTML = '<span class="am-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg></span><span class="am-tx"><b>Efectos y animaciones</b><small>Transiciones, campeón, texto y más</small></span><span class="am-go"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></span>';
+    m.insertBefore(b, m.firstChild);
+  }
+  function hookAdmin() {
+    d.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-fx-adm]'); if (b) { e.preventDefault(); e.stopPropagation(); openAdmin(); } }, true);
+    var tries = 0, iv = setInterval(function () {
+      var r = d.getElementById('admin-root');
+      if (r) { clearInterval(iv); new MutationObserver(injectAdminCard).observe(r, { childList: true, subtree: true }); injectAdminCard(); }
+      else if (++tries > 400) clearInterval(iv);
+    }, 300);
+  }
+
   /* ---------- vigilancia del DOM ---------- */
   var raf = 0;
-  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; try { injectDrawer(); injectSheet(); scanScores(); liteImgs(); } catch (e) { } }); }
+  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; try { injectDrawer(); injectSheet(); scanScores(); liteImgs(); scanSkel(); } catch (e) { } }); }
   function watch() {
     new MutationObserver(schedule).observe(d.body, { childList: true, subtree: true });
     var sheet = d.getElementById('sheet'), was = false;
@@ -388,16 +730,17 @@
 
   /* ---------- arranque ---------- */
   function attach() {
-    L().fx = FX; applyAttrs(); snapScores();
-    S().on('change', function () { checkGoal(); schedule(); });
-    watch();
+    L().fx = FX; lastTab = (L().curTab && L().curTab()) || null; applyAttrs(); snapScores(); wrapSheet();
+    S().on('change', function () { checkGoal(); schedule(); applyAttrs(); checkChamp(); });
+    watch(); hookAdmin(); setTimeout(checkChamp, 1800);
   }
   function boot() {
     injectCSS();
     var n = 0, iv = setInterval(function () { if (L().store && st() && L().prefs && S().on) { clearInterval(iv); attach(); } else if (++n > 200) clearInterval(iv); }, 100);
   }
   FX.confetti = confetti; FX.openStats = openStats; FX.share = shareMatch; FX.calendarURL = calendarURL;
-  FX._t = { cfg: cfg, setFx: setFx, stats: computeStats, scan: scanScores, renderShare: renderShare, checkGoal: checkGoal };
+  FX.openAdmin = openAdmin; FX.showChamp = showChamp;
+  FX._t = { cfg: cfg, setFx: setFx, stats: computeStats, scan: scanScores, renderShare: renderShare, checkGoal: checkGoal, adminFx: adminFx, eff: eff, zoomEff: zoomEff, champions: champions, checkChamp: checkChamp };
   w.LSL = w.LSL || {}; w.LSL.fx = FX;
   if (d.body) boot(); else d.addEventListener('DOMContentLoaded', boot);
 })(window);
